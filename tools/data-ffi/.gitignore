@@ -1,0 +1,2 @@
+# Harness binaries and the Rust target dir used by `make`.
+build/

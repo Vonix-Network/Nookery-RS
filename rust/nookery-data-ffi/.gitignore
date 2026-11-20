@@ -1,0 +1,4 @@
+build/
+# Standalone candidate workspace: the parent workspace owns the lock file once
+# this crate is added to `rust/Cargo.toml`.
+Cargo.lock
