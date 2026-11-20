@@ -5,7 +5,8 @@
 //! `pc/src/pc_save_bswap.c:181-201`.
 
 use nookery_save::typed_swap::{
-    AnimalPersonalId, Direction, LandInfo, PersonalId, RtcTime, RtcYmd, TypedSwap,
+    AnimalPersonalId, Direction, LandInfo, Mail, MailContent, MailHeader, MailName, PersonalId,
+    RtcTime, RtcYmd, TypedSwap,
 };
 use std::mem::{align_of, size_of};
 
@@ -292,5 +293,187 @@ fn byte_image_round_trip_is_lossless() {
 
         let li_bytes: [u8; 0x0C] = image[..0x0C].try_into().unwrap();
         assert_eq!(LandInfo::from_bytes(&li_bytes).to_bytes(), li_bytes);
+    }
+}
+
+/// `Mail_nm_c` has a PersonalID at `0x00`, type at `0x14`, and implicit pad at
+/// `0x15`; the explicit Rust pad makes that C byte lossless.
+#[test]
+fn mail_name_size_alignment_and_padding_match_c_layout() {
+    assert_eq!(size_of::<MailName>(), 0x16);
+    assert_eq!(align_of::<MailName>(), 2);
+    assert_eq!(<MailName as TypedSwap>::SIZE, 0x16);
+
+    let name = MailName {
+        personal_id: PersonalId::default(),
+        type_: 0xA5,
+        pad: 0x5A,
+    };
+    let bytes = name.to_bytes();
+    assert_eq!(bytes[0x14], 0xA5);
+    assert_eq!(bytes[0x15], 0x5A);
+}
+
+/// `Mail_hdr_c` is two adjacent `Mail_nm_c` values, recipient then sender.
+#[test]
+fn mail_header_size_and_nested_offsets_match_c_layout() {
+    assert_eq!(size_of::<MailHeader>(), 0x2C);
+    assert_eq!(align_of::<MailHeader>(), 2);
+    assert_eq!(<MailHeader as TypedSwap>::SIZE, 0x2C);
+
+    let header = MailHeader {
+        recipient: MailName {
+            personal_id: PersonalId {
+                player_id: 0x1234,
+                ..PersonalId::default()
+            },
+            type_: 1,
+            pad: 2,
+        },
+        sender: MailName {
+            personal_id: PersonalId {
+                player_id: 0x5678,
+                ..PersonalId::default()
+            },
+            type_: 3,
+            pad: 4,
+        },
+    };
+    let bytes = header.to_bytes();
+    assert_eq!(&bytes[0x10..0x12], &0x1234u16.to_ne_bytes());
+    assert_eq!(bytes[0x14], 1);
+    assert_eq!(bytes[0x15], 2);
+    assert_eq!(&bytes[0x26..0x28], &0x5678u16.to_ne_bytes());
+    assert_eq!(bytes[0x2A], 3);
+    assert_eq!(bytes[0x2B], 4);
+}
+
+/// `Mail_ct_c` consists entirely of bytes, with lengths `0x18`, `0xC0`, and
+/// `0x20` for its three arrays.
+#[test]
+fn mail_content_is_byte_preserving_and_size_matches_c_layout() {
+    assert_eq!(size_of::<MailContent>(), 0xFC);
+    assert_eq!(align_of::<MailContent>(), 1);
+    assert_eq!(<MailContent as TypedSwap>::SIZE, 0xFC);
+
+    let image = std::array::from_fn(|index| (index as u8).wrapping_mul(37));
+    let mut content = MailContent::from_bytes(&image);
+    content.swap_from_be();
+    assert_eq!(content.to_bytes(), image);
+    content.swap_to_be();
+    assert_eq!(content.to_bytes(), image);
+}
+
+/// `Mail_c` places `present` immediately after its `0x2C`-byte header.
+#[test]
+fn mail_size_and_present_offset_match_c_layout() {
+    assert_eq!(size_of::<Mail>(), 0x12A);
+    assert_eq!(align_of::<Mail>(), 2);
+    assert_eq!(<Mail as TypedSwap>::SIZE, 0x12A);
+
+    let mail = Mail {
+        present: 0x1234,
+        ..Mail::default()
+    };
+    let bytes = mail.to_bytes();
+    assert_eq!(&bytes[0x02C..0x02E], &0x1234u16.to_ne_bytes());
+    assert_eq!(&bytes[0x02E..0x12A], &[0u8; 0xFC]);
+}
+
+/// Direct expected image: only the two PersonalID IDs reverse; type and the
+/// otherwise implicit pad remain exactly where the C layout puts them.
+#[test]
+fn mail_name_swaps_personal_ids_but_preserves_type_and_padding() {
+    let mut disk = [0u8; 0x16];
+    disk[0x00..0x08].copy_from_slice(b"RECIP   ");
+    disk[0x08..0x10].copy_from_slice(b"LAND    ");
+    disk[0x10..0x12].copy_from_slice(&[0x12, 0x34]);
+    disk[0x12..0x14].copy_from_slice(&[0x56, 0x78]);
+    disk[0x14] = 0xA1;
+    disk[0x15] = 0xB2;
+
+    let mut name = MailName::from_bytes(&disk);
+    name.swap_from_be();
+
+    let expected = [
+        b'R', b'E', b'C', b'I', b'P', b' ', b' ', b' ', b'L', b'A', b'N', b'D', b' ', b' ', b' ',
+        b' ', 0x34, 0x12, 0x78, 0x56, 0xA1, 0xB2,
+    ];
+    assert_eq!(name.to_bytes(), expected);
+    assert_eq!(name.type_, 0xA1);
+    assert_eq!(name.pad, 0xB2);
+}
+
+/// Direct expected image: recipient and sender IDs reverse, while all other
+/// bytes in both names stay unchanged.
+#[test]
+fn mail_header_swaps_both_names_only() {
+    let mut disk = [0u8; 0x2C];
+    for (index, byte) in disk.iter_mut().enumerate() {
+        *byte = index as u8;
+    }
+    let mut expected = disk;
+    expected[0x10..0x12].reverse();
+    expected[0x12..0x14].reverse();
+    expected[0x26..0x28].reverse();
+    expected[0x28..0x2A].reverse();
+
+    let mut header = MailHeader::from_bytes(&disk);
+    header.swap_from_be();
+    assert_eq!(header.to_bytes(), expected);
+}
+
+/// `swap_Mail` recurses through the header and swaps `present`; every content
+/// byte remains the original byte image.
+#[test]
+fn mail_swaps_present_and_header_but_not_content() {
+    let mut disk = [0u8; Mail::SIZE];
+    for (index, byte) in disk.iter_mut().enumerate() {
+        *byte = (index as u8).wrapping_mul(11).wrapping_add(3);
+    }
+    let mut expected = disk;
+    expected[0x10..0x12].reverse();
+    expected[0x12..0x14].reverse();
+    expected[0x26..0x28].reverse();
+    expected[0x28..0x2A].reverse();
+    expected[0x2C..0x2E].reverse();
+
+    let mut mail = Mail::from_bytes(&disk);
+    mail.swap_from_be();
+    assert_eq!(mail.to_bytes(), expected);
+    assert_eq!(&mail.to_bytes()[0x02E..], &disk[0x02E..]);
+}
+
+/// Both public directions are byte-identical involutions for the complete
+/// Mail mirror, including nested names and byte-only content.
+#[test]
+fn mail_round_trip_is_lossless_in_both_directions() {
+    let image = std::array::from_fn(|index| (index as u8).wrapping_mul(19).wrapping_add(7));
+
+    let mut from_be = Mail::from_bytes(&image);
+    from_be.swap_from_be();
+    from_be.swap_to_be();
+    assert_eq!(from_be.to_bytes(), image);
+
+    let mut to_be = Mail::from_bytes(&image);
+    to_be.swap_to_be();
+    to_be.swap_from_be();
+    assert_eq!(to_be.to_bytes(), image);
+}
+
+/// Degenerate byte images still exercise every nested swap and are
+/// involutive in both directions.
+#[test]
+fn mail_zero_and_all_ones_images_are_involutive() {
+    for image in [[0u8; Mail::SIZE], [0xFFu8; Mail::SIZE]] {
+        let mut from_be = Mail::from_bytes(&image);
+        from_be.swap_from_be();
+        from_be.swap_from_be();
+        assert_eq!(from_be.to_bytes(), image);
+
+        let mut to_be = Mail::from_bytes(&image);
+        to_be.swap_to_be();
+        to_be.swap_to_be();
+        assert_eq!(to_be.to_bytes(), image);
     }
 }

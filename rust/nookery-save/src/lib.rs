@@ -15,17 +15,19 @@
 //!   (`pc_gci_aux_offsets`).
 //! * Recovery-companion path derivation (`pc_gci_sibling_path` and the
 //!   suffix tables).
-//! * Typed byte-swap for five leaf structs (`typed_swap`): `lbRTC_time_c`,
-//!   `lbRTC_ymd_c`, `PersonalID_c`, `AnmPersonalID_c`, and `mLd_land_info_c`,
-//!   matching the `swap_*` helpers at `pc/src/pc_save_bswap.c:181-201`.
+//! * Typed byte-swap for five leaf structs and the bounded Mail composite
+//!   slice (`typed_swap`): `lbRTC_time_c`, `lbRTC_ymd_c`, `PersonalID_c`,
+//!   `AnmPersonalID_c`, `mLd_land_info_c`, `Mail_nm_c`, `Mail_hdr_c`,
+//!   `Mail_ct_c`, and `Mail_c`, matching the `swap_*` helpers at
+//!   `pc/src/pc_save_bswap.c:181-220`.
 //!
 //! # Explicit non-goals
 //!
-//! * No whole-`Save_t`, `Mail_c`, quest, or ARAM byte-order decoding.  The
-//!   upstream walkers depend on the full decompiled struct layout
-//!   (`pc/src/pc_save_bswap.c`); this crate validates the big-endian bytes on
-//!   disk, hands them back unmodified, and swaps only the five leaf structs in
-//!   [`typed_swap`].
+//! * No whole-`Save_t` or Mail-array byte-order decoding, quest walkers, ARAM,
+//!   card I/O, or runtime integration. The upstream walkers depend on the full
+//!   decompiled struct layout (`pc/src/pc_save_bswap.c`); this crate validates
+//!   the big-endian bytes on disk, hands them back unmodified, and swaps only
+//!   the five leaves plus one source-grounded `Mail_c` in [`typed_swap`].
 //! * No writing, backup rotation, or import.  `pc_gci_write` mutates the
 //!   filesystem and constructs game data, so it is out of scope for a
 //!   validation slice.
@@ -59,7 +61,8 @@ pub use path::{
 };
 pub use record::{AuxBlock, AuxLayout, TownRecord};
 pub use typed_swap::{
-    AnimalPersonalId, Direction, LandInfo, PersonalId, RtcTime, RtcYmd, TypedSwap,
+    AnimalPersonalId, Direction, LandInfo, Mail, MailContent, MailHeader, MailName, PersonalId,
+    RtcTime, RtcYmd, TypedSwap,
 };
 
 use std::fs::File;
