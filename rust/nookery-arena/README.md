@@ -105,7 +105,7 @@ leaving the node `pad` word uninitialized.
 `tests/parity.rs` replays a transcript — including a 24-step fixed-seed
 interleaving of sizes and masks — and requires byte-identical output with the
 unmodified `src/TwoHeadArena.c` and `src/gamealloc.c` compiled at 32-bit width;
-see `parity/README.md` for that harness and how to regenerate it. 
+see `parity/README.md` for that harness and how to regenerate it.
 
 ## License and attribution
 
