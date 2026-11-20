@@ -2,14 +2,11 @@
 name = "nookery-arena"
 version = "0.1.0"
 description = "Rust port of Nookery's GameAlloc and TwoHeadArena primitives"
-edition = "2024"
-license = "MIT"
-rust-version = "1.85"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
 
-# Deliberately standalone: the repository workspace (`rust/Cargo.toml`) is not
-# modified by this crate.  An empty `[workspace]` table keeps this crate from
-# being treated as an implicit member of the parent workspace.
-[workspace]
+# Parent workspace registration is managed in `rust/Cargo.toml`.
 
 [lib]
 path = "src/lib.rs"

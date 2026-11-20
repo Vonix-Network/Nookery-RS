@@ -2,13 +2,11 @@
 name = "nookery-disc"
 version = "0.1.0"
 description = "Bounded Animal Crossing disc catalog, header decoding, and verification seam for the Nookery port"
-edition = "2024"
-license = "MIT"
-rust-version = "1.85"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
-# Standalone candidate crate: the repository workspace at rust/Cargo.toml does
-# not list it as a member yet, so it declares its own workspace root.
-[workspace]
+# Parent workspace registration is managed in `rust/Cargo.toml`.
