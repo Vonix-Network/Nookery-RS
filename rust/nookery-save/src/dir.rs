@@ -158,9 +158,10 @@ impl CardDir {
     /// Port of `pc_gci_dir_has_name`.
     ///
     /// The comparison is exact and NUL-terminated: the game name must start
-    /// with `"GAF"`, `name` must be a non-empty C string shorter than 32
-    /// bytes with no interior NUL, and the field must hold `name` followed by
-    /// a NUL.  Trailing bytes after that NUL are ignored, exactly as
+    /// with `"GAF"`, `name` must be a C string shorter than 32 bytes with no
+    /// interior NUL, and the field must hold `name` followed by a NUL.  An
+    /// empty `name` therefore matches only an empty field.  Trailing bytes
+    /// after that NUL are ignored, exactly as
     /// `memcmp(dir->fileName, file_name, length + 1)` ignores them.
     pub fn matches_file_name(&self, name: &[u8]) -> bool {
         // The C source applies strlen() to a NUL-terminated name.  Empty
