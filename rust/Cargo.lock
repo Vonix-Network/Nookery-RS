@@ -60,6 +60,14 @@ name = "nookery-save"
 version = "0.1.0"
 
 [[package]]
+name = "nookery-social-model"
+version = "0.1.0"
+
+[[package]]
+name = "nookery-social-proto"
+version = "0.1.0"
+
+[[package]]
 name = "nookery-texture"
 version = "0.1.0"
 
