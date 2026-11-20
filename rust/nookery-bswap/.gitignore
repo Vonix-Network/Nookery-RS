@@ -1,0 +1,5 @@
+# Standalone workspace while the crate is unintegrated: keep the throwaway
+# lock file and build output out of the tree. Delete this file when
+# `nookery-bswap` joins the `rust/` workspace.
+/target/
+Cargo.lock

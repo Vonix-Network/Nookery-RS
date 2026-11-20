@@ -1,0 +1,15 @@
+[package]
+name = "nookery-bswap"
+version = "0.1.0"
+description = "Bounded LE<->BE byte-swap and u8 bitfield repack primitives for the Nookery port"
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+
+# Standalone workspace so the crate builds before it is registered upstream.
+# Integration into `rust/Cargo.toml` = add "nookery-bswap" to `members` and
+# delete this table; the literal `edition`/`license`/`rust-version` keys above
+# can then be restored to `*.workspace = true`.
+[workspace]
+
+[dependencies]
