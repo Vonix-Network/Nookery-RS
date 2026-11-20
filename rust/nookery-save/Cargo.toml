@@ -1,0 +1,13 @@
+[package]
+name = "nookery-save"
+version = "0.1.0"
+description = "Bounded GCI memory-card save validator for the Nookery port"
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+
+[dependencies]
+
+# Standalone candidate crate: the repository workspace at rust/Cargo.toml does
+# not list it as a member yet, so it declares its own workspace root.
+[workspace]
