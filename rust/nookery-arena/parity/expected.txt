@@ -1,0 +1,69 @@
+ct_2000_100 tail=00002100 free=256 free16=256 crash=0 head=00002000
+a16_20=000020e0
+after_a16_20 tail=000020e0 free=224 free16=224 crash=0 head=00002000
+a16_11=000020c0
+a16_0=000020c0
+after_zero tail=000020c0 free=192 free16=192 crash=0 head=00002000
+reinit tail=00002100 free=256 free16=256 crash=0 head=00002000
+aa_40_mask~1f=000020c0
+aa_41_mask~1f=00002060
+aa_10_mask-1=00002050
+aa_10_mask-2=00002040
+after_aa tail=00002040 free=64 free16=64 crash=0 head=00002000
+ct_2008_100 tail=00002108 free=256 free16=248 crash=0 head=00002008
+gfb_~1f=225
+gfb_-16=241
+gfb_-1=256
+exact=00002000
+at_exact tail=00002000 free=0 free16=0 crash=0 head=00002000
+over=00001ff0
+after_over tail=00001ff0 free=-16 free16=-16 crash=1 head=00002000
+wrap=fffffff0
+after_wrap tail=fffffff0 free=-32 free16=-32 crash=1 head=00000010
+dt tail=00000000 free=0 free16=0 crash=0 head=00000000
+ct_wrap_end tail=00000100 free=512 free16=512 crash=0 head=ffffff00
+sim=0 siz=85 mask=-1 ptr=000033ab free=939 free16=939 crash=0
+sim=1 siz=66 mask=-16 ptr=00003350 free=848 free16=848 crash=0
+sim=2 siz=55 mask=-32 ptr=00003300 free=768 free16=768 crash=0
+sim=3 siz=21 mask=-1 ptr=000032eb free=747 free16=747 crash=0
+sim=4 siz=95 mask=-32 ptr=00003280 free=640 free16=640 crash=0
+sim=5 siz=8 mask=-2 ptr=00003278 free=632 free16=632 crash=0
+sim=6 siz=50 mask=-16 ptr=00003230 free=560 free16=560 crash=0
+sim=7 siz=10 mask=-16 ptr=00003220 free=544 free16=544 crash=0
+sim=8 siz=77 mask=-1 ptr=000031d3 free=467 free16=467 crash=0
+sim=9 siz=123 mask=-32 ptr=00003140 free=320 free16=320 crash=0
+sim=10 siz=0 mask=-1 ptr=00003140 free=320 free16=320 crash=0
+sim=11 siz=118 mask=-16 ptr=000030c0 free=192 free16=192 crash=0
+sim=12 siz=23 mask=-32 ptr=000030a0 free=160 free16=160 crash=0
+sim=13 siz=18 mask=-16 ptr=00003080 free=128 free16=128 crash=0
+sim=14 siz=53 mask=-1 ptr=0000304b free=75 free16=75 crash=0
+sim=15 siz=115 mask=-32 ptr=00002fc0 free=-64 free16=-64 crash=1
+sim=16 siz=72 mask=-2 ptr=00002f78 free=-136 free16=-136 crash=1
+sim=17 siz=64 mask=-2 ptr=00002f38 free=-200 free16=-200 crash=1
+sim=18 siz=63 mask=-32 ptr=00002ee0 free=-288 free16=-288 crash=1
+sim=19 siz=93 mask=-1 ptr=00002e83 free=-381 free16=-381 crash=1
+sim=20 siz=0 mask=-1 ptr=00002e83 free=-381 free16=-381 crash=1
+sim=21 siz=0 mask=-1 ptr=00002e83 free=-381 free16=-381 crash=1
+sim=22 siz=107 mask=-32 ptr=00002e00 free=-512 free16=-512 crash=1
+sim=23 siz=44 mask=-2 ptr=00002dd4 free=-556 free16=-556 crash=1
+sim_end tail=00002dd4 free=-556 free16=-556 crash=1 head=00003000
+ga_init head.next=HEAD head.prev=HEAD tail=HEAD
+ga_m1=00000020
+ga_after_m1 head.next=00000010 head.prev=00000010 tail=00000010
+ga_m2=00000050
+ga_m3=00000070
+ga_after_m3 head.next=00000010 head.prev=00000060 tail=00000060
+node=0 next=00000040 prev=HEAD size=32
+node=1 next=00000060 prev=00000010 size=16
+node=2 next=HEAD prev=00000040 size=0
+ga_after_free_m2 head.next=00000010 head.prev=00000060 tail=00000060
+node0_next_after_free=00000060
+node2_prev_after_free=00000010
+ga_after_free_null head.next=00000010 head.prev=00000060 tail=00000060
+ga_m4=00000080
+ga_after_m4 head.next=00000010 head.prev=00000070 tail=00000070
+ga_cleanup head.next=HEAD head.prev=HEAD tail=HEAD
+ga_after_cleanup_m5=000000d0
+ga_after_m5 head.next=000000c0 head.prev=000000c0 tail=000000c0
+ga_exhausted=NULL
+ga_after_exhausted head.next=000000c0 head.prev=000000c0 tail=000000c0
