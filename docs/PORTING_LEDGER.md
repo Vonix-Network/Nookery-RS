@@ -99,9 +99,9 @@ Third-party emulator; integrate, do not rewrite.
 
 | | |
 |---|---|
-| **Target** | `pc/src/acgc_disc.cpp`, `pc/src/acgc_texture_replacements.cpp`, asset pipeline; bounded seam in `rust/nookery-disc` |
-| **Slices** | (a) accepted-disc catalog + xxh3-128 check; (b) HD texture pack indexing |
-| **Gate — current candidate** | Rust catalog/header/hash classification and bounded read/error behavior pass 52 tests; no successful Aurora RVZ/ISO/CISO/GCM decode or user-path launch is claimed. |
+| **Target** | `pc/src/acgc_disc.cpp`, `pc/src/acgc_texture_replacements.cpp`, asset pipeline; bounded seams in `rust/nookery-disc` and `rust/nookery-texture` |
+| **Slices** | (a) accepted-disc catalog + xxh3-128 check; (b) exact texture-pack primary/cwd/base-relative path selection; (c) HD texture pack indexing |
+| **Gate — current candidate** | Rust catalog/header/hash classification and bounded read/error behavior pass 52 tests; texture path precedence and non-directory handling pass 6 tests; no successful Aurora RVZ/ISO/CISO/GCM decode, texture registration, or user-path launch is claimed. |
 | **Gate** | All four image formats (RVZ, ISO, CISO, GCM) accepted; wrong-hash disc rejected with the same error; texture replacement for a known pack resolves identically |
 | **Constraint** | Never ship a disc image or extracted assets; tests use user-supplied input or a synthetic hash fixture |
 
@@ -159,7 +159,7 @@ An optimization is accepted only with a row here showing the metric, the before/
 | 3 | Settings + input | **Candidate — settings model + bounded input profile/legacy slice; live SDL/PADStatus/controller integration not started** |
 | 4 | Allocator / arenas | **Candidate — bounded model + fixed-seed C parity; runtime ABI and workload gates not started** |
 | 5 | Famicom boundary | **Candidate — host seam only; emulator/fixNES not started** |
-| 6 | Disc + content | **Candidate — catalog/header/hash seam; Aurora format decoding, texture indexing, and user path not started** |
+| 6 | Disc + content | **Candidate — catalog/header/hash + texture path seams; Aurora format decoding, texture runtime, indexing, and user path not started** |
 | 7 | UI + platform services | Not started |
 | 8 | Boot + integration | Not started |
 
