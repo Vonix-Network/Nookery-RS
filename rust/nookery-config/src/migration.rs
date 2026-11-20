@@ -15,7 +15,10 @@ use serde_json::Value;
 /// behaviour of leaving an undecodable value untouched for a later correction.
 pub trait EnumCodec {
     /// Numeric value -> canonical settings string.
-    fn decode_to_config_str(&self, code: i64) -> Option<&'static str>;
+    ///
+    /// `key` is part of the adapter contract because each upstream enum has its
+    /// own codec table even when the JSON migration walks one object.
+    fn decode_to_config_str(&self, key: &str, code: i64) -> Option<&'static str>;
 }
 
 /// Runs every migration on a settings value tree.
@@ -35,11 +38,30 @@ pub fn migrate_enum(root: &mut Value, key: &str, codec: &dyn EnumCodec) {
     let Some(value) = mapped.get(key) else {
         return;
     };
-    let Some(code) = value.as_i64() else {
+    let Some(code) = numeric_code(value) else {
         return;
     };
-    if let Some(text) = codec.decode_to_config_str(code) {
+    if let Some(text) = codec.decode_to_config_str(key, code) {
         mapped.insert(key.to_owned(), Value::String(text.to_owned()));
+    }
+}
+
+/// Matches Borealis' integer codec: signed/unsigned JSON integers are accepted
+/// when they fit the adapter's signed input, and integral finite floats are
+/// accepted only through the exact binary-integer range used by the C++ codec.
+fn numeric_code(value: &Value) -> Option<i64> {
+    if let Some(code) = value.as_i64() {
+        return Some(code);
+    }
+    if let Some(code) = value.as_u64() {
+        return i64::try_from(code).ok();
+    }
+    let code = value.as_f64()?;
+    const EXACT_LIMIT: f64 = 9_007_199_254_740_992.0; // 2^53
+    if code.is_finite() && code.fract() == 0.0 && code.abs() <= EXACT_LIMIT {
+        Some(code as i64)
+    } else {
+        None
     }
 }
 
@@ -71,7 +93,7 @@ mod tests {
     struct TestCodec;
 
     impl EnumCodec for TestCodec {
-        fn decode_to_config_str(&self, code: i64) -> Option<&'static str> {
+        fn decode_to_config_str(&self, _key: &str, code: i64) -> Option<&'static str> {
             match code {
                 0 => Some("unknown"),
                 1 => Some("success"),
@@ -108,15 +130,15 @@ mod tests {
     }
 
     #[test]
-    fn enum_migration_rewrites_numbers_and_preserves_undecodable() {
+    fn enum_migration_accepts_integral_float_and_rejects_non_integral_or_wide_codes() {
         let mut root = json!({
-            "video.theme": 1,
-            "backend.discVerification": 7,
-            "video.renderer": "vulkan",
+            "video.theme": 1.0,
+            "backend.discVerification": 2.5,
+            "video.renderer": 18_446_744_073_709_551_615u64,
         });
         migrate_settings(&mut root, &TestCodec);
         assert_eq!(root["video.theme"], json!("success"));
-        assert_eq!(root["backend.discVerification"], json!(7));
-        assert_eq!(root["video.renderer"], json!("vulkan"));
+        assert_eq!(root["backend.discVerification"], json!(2.5));
+        assert_eq!(root["video.renderer"], json!(18_446_744_073_709_551_615u64));
     }
 }

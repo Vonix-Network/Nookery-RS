@@ -84,7 +84,7 @@ fn every_declared_key_resolves_and_round_trips() {
 }
 
 #[test]
-fn integer_ranges_accept_bounds_and_reject_outside() {
+fn integer_ranges_clamp_on_set_like_borealis() {
     let cases: &[(&str, &std::ops::RangeInclusive<i64>)] = &[
         ("video.windowWidth", &WINDOW_WIDTH),
         ("video.windowHeight", &WINDOW_HEIGHT),
@@ -105,25 +105,14 @@ fn integer_ranges_accept_bounds_and_reject_outside() {
             .unwrap_or_else(|e| panic!("{key} rejected max {max}: {e}"));
         assert_eq!(s.get(key).unwrap().as_int(), Some(max));
 
-        for bad in [min - 1, max + 1] {
+        for (value, expected) in [(min - 1, min), (max + 1, max)] {
             let mut s = Settings::default();
-            let error = s
-                .set(key, int(bad))
-                .expect_err(&format!("{key} accepted {bad}"));
+            s.set(key, int(value))
+                .unwrap_or_else(|e| panic!("{key} rejected {value}: {e}"));
             assert_eq!(
-                error,
-                SettingsError::OutOfRange {
-                    key: (*key).to_owned(),
-                    value: bad,
-                    min,
-                    max
-                },
-                "{key} reported the wrong rejection"
-            );
-            assert_eq!(
-                s,
-                Settings::default(),
-                "{key} mutated the model on rejection"
+                s.get(key).unwrap().as_int(),
+                Some(expected),
+                "{key} did not apply Borealis-style constraint"
             );
         }
     }
@@ -457,19 +446,14 @@ window_width=99999999999999999999
 }
 
 #[test]
-fn legacy_window_width_has_only_a_lower_bound_then_sanitize_repairs() {
-    // Upstream imports `value >= 640` without an upper bound; the registry range
-    // is enforced separately, which is why `sanitize` exists.
+fn legacy_window_width_has_only_a_lower_bound_then_var_constrains() {
+    // Upstream imports `value >= 640` without an upper-bound branch, but the
+    // registry's Var<int>::set_user constrains the value as it is applied.
     let result = parse_legacy_settings("window_width=999999\nwindow_height=999999\n");
     assert_eq!(result.imported, 2);
-    assert_eq!(result.settings.video.window_width, 999_999);
-    assert!(result.settings.validate().is_err());
-
-    let mut repaired = result.settings;
-    repaired.sanitize();
-    assert_eq!(repaired.video.window_width, 16_384);
-    assert_eq!(repaired.video.window_height, 16_384);
-    assert_eq!(repaired.validate(), Ok(()));
+    assert_eq!(result.settings.video.window_width, 16_384);
+    assert_eq!(result.settings.video.window_height, 16_384);
+    assert_eq!(result.settings.validate(), Ok(()));
 }
 
 #[test]

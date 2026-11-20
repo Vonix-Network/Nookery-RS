@@ -404,9 +404,11 @@ impl Settings {
         Some(value)
     }
 
-    /// Writes a key. Rejects unknown keys ([`SettingsError::UnknownKey`]),
-    /// out-of-range integers ([`SettingsError::OutOfRange`]) and wrong encodings
-    /// ([`SettingsError::InvalidValue`]) without mutating `self`.
+    /// Writes a key. Rejects unknown keys ([`SettingsError::UnknownKey`]) and
+    /// wrong encodings ([`SettingsError::InvalidValue`]) without mutating `self`.
+    /// Ranged integers are constrained immediately, matching Borealis
+    /// `Var<T>::set_user`: values below the minimum become the minimum and values
+    /// above the maximum become the maximum.
     ///
     /// Numeric enum values are rejected here: the enum codec is runtime-owned, so
     /// such values must go through [`crate::migration`] first.
@@ -444,10 +446,11 @@ impl Settings {
                 self.video.window_mode = decode_range(key, &value, &WINDOW_MODE)?;
             }
             "video.uiScale" => {
-                // Upstream sanitizes rather than rejects; see `Settings::sanitize`.
-                self.video.ui_scale = value
-                    .as_int()
-                    .ok_or_else(|| SettingsError::invalid(key, "expected an integer"))?;
+                self.video.ui_scale = sanitize_ui_scale(
+                    value
+                        .as_int()
+                        .ok_or_else(|| SettingsError::invalid(key, "expected an integer"))?,
+                );
             }
             "video.theme" => {
                 self.video.theme = decode_enum(key, &value)?;
@@ -643,11 +646,7 @@ fn decode_range(
     let int = value
         .as_int()
         .ok_or_else(|| SettingsError::invalid(key, "expected an integer"))?;
-    if range.contains(&int) {
-        Ok(int)
-    } else {
-        Err(SettingsError::range(key, int, range))
-    }
+    Ok(clamp(int, range))
 }
 
 fn decode_enum<T: EnumStrings>(key: &str, value: &SettingValue) -> Result<T, SettingsError> {
