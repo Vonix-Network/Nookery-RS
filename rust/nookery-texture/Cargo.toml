@@ -1,0 +1,11 @@
+[package]
+name = "nookery-texture"
+version = "0.1.0"
+edition = "2021"
+description = "Bounded texture-pack path selection for Nookery-RS"
+license = "MIT"
+
+[lib]
+path = "src/lib.rs"
+
+[workspace]
