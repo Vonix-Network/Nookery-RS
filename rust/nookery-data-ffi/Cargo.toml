@@ -1,17 +1,10 @@
-# Standalone candidate workspace root.
-#
-# The ABI lane is not allowed to edit `rust/Cargo.toml`, so this crate is its
-# own workspace. Parent integration is a one-line `members` addition plus
-# dropping the `[workspace]` table below.
-[workspace]
-
 [package]
 name = "nookery-data-ffi"
 version = "0.1.0"
 description = "C ABI adapter candidate over nookery-core data-folder primitives"
-edition = "2024"
-license = "MIT"
-rust-version = "1.85"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
 publish = false
 
 [lib]

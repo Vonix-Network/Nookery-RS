@@ -34,6 +34,13 @@ name = "nookery-core"
 version = "0.1.0"
 
 [[package]]
+name = "nookery-data-ffi"
+version = "0.1.0"
+dependencies = [
+ "nookery-core",
+]
+
+[[package]]
 name = "nookery-disc"
 version = "0.1.0"
 dependencies = [
