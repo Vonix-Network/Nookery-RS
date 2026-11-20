@@ -15,13 +15,17 @@
 //!   (`pc_gci_aux_offsets`).
 //! * Recovery-companion path derivation (`pc_gci_sibling_path` and the
 //!   suffix tables).
+//! * Typed byte-swap for five leaf structs (`typed_swap`): `lbRTC_time_c`,
+//!   `lbRTC_ymd_c`, `PersonalID_c`, `AnmPersonalID_c`, and `mLd_land_info_c`,
+//!   matching the `swap_*` helpers at `pc/src/pc_save_bswap.c:181-201`.
 //!
 //! # Explicit non-goals
 //!
-//! * No byte-order field decoding of `Save_t` or the auxiliary blocks.  The
-//!   upstream swap routines depend on the full decompiled struct layout
-//!   (`pc/src/pc_save_bswap.c`); this crate only validates the big-endian
-//!   bytes on disk and hands them back unmodified.
+//! * No whole-`Save_t`, `Mail_c`, quest, or ARAM byte-order decoding.  The
+//!   upstream walkers depend on the full decompiled struct layout
+//!   (`pc/src/pc_save_bswap.c`); this crate validates the big-endian bytes on
+//!   disk, hands them back unmodified, and swaps only the five leaf structs in
+//!   [`typed_swap`].
 //! * No writing, backup rotation, or import.  `pc_gci_write` mutates the
 //!   filesystem and constructs game data, so it is out of scope for a
 //!   validation slice.
@@ -40,6 +44,7 @@ pub mod error;
 pub mod layout;
 pub mod path;
 pub mod record;
+pub mod typed_swap;
 
 pub use checksum::{checksum_be, verify_block};
 pub use dir::{CardDir, FILE_NAME_MAX, HEADER_SIZE};
@@ -53,6 +58,9 @@ pub use path::{
     sibling_path, validate_record_name,
 };
 pub use record::{AuxBlock, AuxLayout, TownRecord};
+pub use typed_swap::{
+    AnimalPersonalId, Direction, LandInfo, PersonalId, RtcTime, RtcYmd, TypedSwap,
+};
 
 use std::fs::File;
 use std::io::{ErrorKind, Read};
