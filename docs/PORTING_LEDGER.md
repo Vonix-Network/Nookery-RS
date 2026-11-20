@@ -86,8 +86,9 @@ Third-party emulator; integrate, do not rewrite.
 
 | | |
 |---|---|
-| **Target** | `pc/src/pc_nes_fixnes.c`, `src/famicom_emu.c`, `src/static/Famicom/` |
+| **Target** | `rust/nookery-famicom` host seam first; `pc/src/pc_nes_fixnes.c`, `src/famicom_emu.c`, `src/static/Famicom/` remain the oracle |
 | **Slices** | (a) frame-buffer contract (256×240 RGB565); (b) AI DMA audio cadence; (c) save-header (`0x40`) and internal-ROM table |
+| **Gate — current candidate** | ROM catalog, exact exit combos/countdown, frame-action ordering, and PC arena/cleanup contract pass bounded tests; no emulator or fixNES implementation is included. |
 | **Gate — visual** | A known NES ROM renders an identical frame hash (per-frame CRC over the RGB565 buffer) as the C path for a fixed input script |
 | **Gate — audio** | Sample sequence bit-identical for the same script; no underruns introduced |
 | **Constraint** | fixNES is MIT (FIX94) — keep `pc/lib/fixnes/LICENSE` and attribution; do not vendor a different emulator |
@@ -109,7 +110,7 @@ Third-party emulator; integrate, do not rewrite.
 | **Slices** | One screen at a time (settings, touch controls, town select, overlays) behind the existing Borealis trait boundary |
 | **Gate — UI** | Render the real page in a window; assert on the DOM/control, not on the presence of a label string (a `[role="switch"]` must actually toggle the setting it names) |
 | **Gate — platform** | Same screen behaves on all five families; touch editor works on Android/iOS |
-| **Risk** | Borealis is unpopulated at this pin, so its trait shapes are `INFERRED` from call sites; confirm against a checked-out submodule before starting |
+| **Risk** | UI trait shapes must be confirmed against the checked-out Borealis submodule before starting; the existing Rust host seams do not replace platform services |
 
 ## Phase 8 — Boot and integration
 
@@ -143,7 +144,7 @@ An optimization is accepted only with a row here showing the metric, the before/
 | 2 | Save/GCI + byteswap | **Candidate — GCI validator only; byteswap/card I/O not started** |
 | 3 | Settings + input | **Candidate — settings model only; input not started** |
 | 4 | Allocator / arenas | Not started |
-| 5 | Famicom boundary | Not started |
+| 5 | Famicom boundary | **Candidate — host seam only; emulator/fixNES not started** |
 | 6 | Disc + content | Not started |
 | 7 | UI + platform services | Not started |
 | 8 | Boot + integration | Not started |

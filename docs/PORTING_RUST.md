@@ -34,7 +34,7 @@ OBSERVED at the pinned commit (`du -sh`, `find … | wc -l`, `cat | wc -l`):
 | `extern/aurora/` | — | — | — | Aurora submodule, checked out at the pinned gitlink |
 | `extern/borealis/` | — | — | — | Borealis submodule, checked out at the pinned gitlink |
 | `assets/` | 980 KiB | — | — | Port-owned assets only |
-| `rust/` | — | 27 | 4 370 | Rust workspace (`nookery-core`, `nookery-save`, `nookery-config`) |
+| `rust/` | — | 36 | 6 200 | Rust workspace (`nookery-core`, `nookery-save`, `nookery-config`, `nookery-famicom`) |
 
 The current verification checkout reports Aurora `7c8c6117eb4061d35aacd10613ed5a0f0ef02727` and Borealis `8e9427fab92c1935a5d6bacadc6053c687f10c1e`, both checked out. The original `nookery-core` data model was authored from call sites; checked-out dependency source is now available for a later reconciliation pass.
 
@@ -89,7 +89,7 @@ The handwritten port. 26 top-level units in `pc/src/` plus 17 UI units in `pc/sr
 
 Workspace at `rust/Cargo.toml`: edition 2024, `rust-version = "1.85"`, release profile `opt-level = 3`, `lto = "thin"`, `codegen-units = 1`, `panic = "abort"`, `strip = "symbols"`.
 
-The workspace currently contains three bounded crates. The crates are not wired into the CMake application.
+The workspace currently contains four bounded crates. The crates are not wired into the CMake application.
 
 | Module | Public surface |
 |---|---|
@@ -99,7 +99,7 @@ The workspace currently contains three bounded crates. The crates are not wired 
 | `status.rs` | `ErrorCode` (13 variants) with byte-for-byte upstream messages, `Status` |
 | `base.rs` | `BasePath` — `Unavailable` by design (executable discovery not ported) |
 
-`nookery-save` contains the GCI directory/record/checksum validator and bounded save-file helpers. `nookery-config` contains scalar settings defaults/ranges, Borealis-style constraint behavior, legacy INI import, and JSON migration helpers. The current workspace gates pass for 18 `nookery-core` tests, 10 `nookery-save` unit tests, 5 save path tests, 16 town-record tests, and 23 `nookery-config` tests.
+`nookery-save` contains the GCI directory/record/checksum validator and bounded save-file helpers. `nookery-config` contains scalar settings defaults/ranges, Borealis-style constraint behavior, legacy INI import, and JSON migration helpers. `nookery-famicom` contains the source-verified ROM catalog, exit/countdown state machine, frame-action ordering, and PC arena/cleanup contract; it does not contain an emulator. The current workspace gates pass for 18 `nookery-core` tests, 10 `nookery-save` unit tests, 5 save path tests, 16 town-record tests, 23 `nookery-config` tests, 18 Famicom allocator tests, 24 Famicom exit tests, and 11 Famicom ROM-catalog tests.
 
 The data crate models `borealis::data` from its call sites in `acgc_data.cpp` and `pc/src/ui/settings.cpp` (`data_folder_error_message`). Documented divergences in `layout.rs`: `relative()` refuses absolute/`..` paths where upstream's `pc_platform_user_path` joins blindly — a deliberate hardening marked as such in the code.
 
@@ -148,9 +148,9 @@ Any Rust slice is only “done” when all eight cells still build **and** the u
 
 ## Current candidate status
 
-**What is real:** the `nookery-core` data-folder primitive; the `nookery-save` GCI directory/record/checksum validator; and the `nookery-config` scalar settings, legacy import, and JSON migration model. Their bounded workspace tests and Clippy gates pass. They build standalone and are wired into nothing.
+**What is real:** the `nookery-core` data-folder primitive; the `nookery-save` GCI directory/record/checksum validator; the `nookery-config` scalar settings, legacy import, and JSON migration model; and the bounded `nookery-famicom` host seam. Their bounded workspace tests and Clippy gates pass. They build standalone and are wired into nothing.
 
-**What is not:** no CMake integration, data-manager C ABI, full save byteswap/card I/O, input, allocator, Famicom, disc, UI, or boot code is ported. The shipped application is still entirely C/C++. The next acceptance work is to reconcile and gate the active disc/input/arena/Famicom candidates, then build the first C ABI parity harness.
+**What is not:** no CMake integration, data-manager C ABI, full save byteswap/card I/O, input, typed game allocator, NES emulator/fixNES boundary, disc, UI, or boot code is ported. The shipped application is still entirely C/C++. The next acceptance work is to reconcile and gate the active disc/input/arena candidates, then build the first C ABI parity harness.
 
 ## Attribution and license
 
