@@ -15,7 +15,7 @@ These hold for every phase. A phase that violates one is not done, regardless of
 7. **Panic never crosses FFI.** `panic = "abort"`; every `extern "C"` entry validates and returns a status. No `unwrap`/index on untrusted input.
 8. **Truthful status.** A slice compiles ≠ ported. Ledger state moves only when its gate is observed to pass on the listed platforms.
 
-## Phase 0 — Baseline (complete)
+## Phase 0 — Baseline
 
 Keep the fork's starting point measurable so later phases have an oracle.
 
@@ -23,8 +23,8 @@ Keep the fork's starting point measurable so later phases have an oracle.
 |---|---|
 | Deliverable | Documented pin, build matrix, existing Rust crate |
 | Gate | `git rev-parse HEAD` = pinned base; `cargo test --offline` in `rust/` → 18 passed; CMake configures on at least one cell |
-| Observed | All three pass at `a81c1aaf` (OBSERVED in this ledger's authoring run) |
-| Status | **Done** |
+| Observed | The Rust baseline test passed at `a81c1aaf`; the local CMake configure gate is blocked by missing X11/Wayland development libraries on the current host. |
+| Status | **Partial — host CMake gate blocked** |
 
 ## Phase 1 — Data-folder boundary behind a C ABI
 
@@ -45,8 +45,9 @@ Highest-risk-for-correctness slice: user saves must round-trip.
 
 | | |
 |---|---|
-| **Target** | `pc/src/pc_gci.c`, `pc/src/pc_save_bswap.c`, `pc/include/pc_gci.h`, `pc_save_bswap.h` |
+| **Target** | `rust/nookery-save` first; `pc/src/pc_gci.c`, `pc/src/pc_save_bswap.c`, `pc/include/pc_gci.h`, `pc_save_bswap.h` remain the oracle |
 | **Slices** | (a) GCI header (`CARDDir`, 0x2000 blocks, rotation suffixes); (b) `Save_t`/ARAM LE↔BE swap; (c) card A/B directory resolution |
+| **Gate — current candidate** | GCI directory/record/checksum validation and bounded path/read tests pass; this does not yet prove full `Save_t` byteswap or card I/O parity. |
 | **Gate — round-trip** | For N real `.gci` files (user-supplied, never committed): C reads → Rust byteswaps → C reads must produce identical `Save_t`; and Rust write → C read → Rust read is stable. Any byte diff fails |
 | **Gate — failure modes** | `pc_save_result` states `PC_SAVE_MISSING` / `PC_SAVE_INVALID` / `PC_SAVE_IO_ERROR` reproduced for truncated, wrong-hash, and unreadable files |
 | **Gate — regression** | Existing C save path still loads a previously saved village (the C oracle is unchanged) |
@@ -58,8 +59,9 @@ Frozen on-disk and in-memory contracts.
 
 | | |
 |---|---|
-| **Target** | `pc/src/acgc_settings.cpp`, `pc/include/pc_settings.h`, `pc/src/acgc_input_profiles.cpp`, `src/padmgr.c` |
+| **Target** | `rust/nookery-config` first; `pc/src/acgc_settings.cpp`, `pc/include/pc_settings.h`, `pc/src/acgc_input_profiles.cpp`, `src/padmgr.c` remain the oracle |
 | **Slices** | (a) `PCSettings` field order + `config.json` codec keys; (b) keyboard/gamepad default maps; (c) deadzone math |
+| **Gate — current candidate** | Scalar defaults/ranges, Borealis-style constraints, legacy INI import, and JSON migration tests pass. Real-install round-trip and C ABI parity are not yet proven. |
 | **Gate — config** | Round-trip an existing `config.json` and `settings.ini` from a real install: every key and value preserved; unknown keys retained, not dropped |
 | **Gate — input** | Same controller input sequence yields identical `PADStatus` bytes from C and Rust across the deadzone boundary (0, at-threshold, above-threshold) |
 | **Gate — platform** | Touch-control layouts on Android/iOS still render and the layout editor still saves |
@@ -136,10 +138,10 @@ An optimization is accepted only with a row here showing the metric, the before/
 
 | Phase | Scope | State |
 |---|---|---|
-| 0 | Baseline pin + crate tests | **Done** |
+| 0 | Baseline pin + crate tests | **Partial — host CMake gate blocked** |
 | 1 | Data-folder C ABI + parity harness | Candidate (crate logic exists, unwired) |
-| 2 | Save/GCI + byteswap | Not started |
-| 3 | Settings + input | Not started |
+| 2 | Save/GCI + byteswap | **Candidate — GCI validator only; byteswap/card I/O not started** |
+| 3 | Settings + input | **Candidate — settings model only; input not started** |
 | 4 | Allocator / arenas | Not started |
 | 5 | Famicom boundary | Not started |
 | 6 | Disc + content | Not started |

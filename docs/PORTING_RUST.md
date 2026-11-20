@@ -31,12 +31,12 @@ OBSERVED at the pinned commit (`du -sh`, `find … | wc -l`, `cat | wc -l`):
 | `pc/` | 11 MiB | 236 | 66 645 | Handwritten PC host layer (C/C++) |
 | `include/` | 4.7 MiB | 754 | 85 119 | Decomp headers plus Famicom/GBA/Dolphin shims |
 | `libs/dolphin/` | 1.6 MiB | — | — | Dolphin SDK reimplementation (gx, mtx, pad, dvd, card, dsp) |
-| `extern/aurora/` | 12 KiB | 0 | — | Submodule, **unpopulated** at this pin |
-| `extern/borealis/` | — | 0 | — | Submodule, **unpopulated** at this pin |
+| `extern/aurora/` | — | — | — | Aurora submodule, checked out at the pinned gitlink |
+| `extern/borealis/` | — | — | — | Borealis submodule, checked out at the pinned gitlink |
 | `assets/` | 980 KiB | — | — | Port-owned assets only |
-| `rust/` | — | 8 | 925 | Rust workspace (`nookery-core`), 18 unit tests |
+| `rust/` | — | 27 | 4 370 | Rust workspace (`nookery-core`, `nookery-save`, `nookery-config`) |
 
-`git submodule status` reports leading `-` for both submodules, i.e. neither is checked out. Any claim depending on Aurora or Borealis **source** is therefore `INFERRED` from call sites only.
+The current verification checkout reports Aurora `7c8c6117eb4061d35aacd10613ed5a0f0ef02727` and Borealis `8e9427fab92c1935a5d6bacadc6053c687f10c1e`, both checked out. The original `nookery-core` data model was authored from call sites; checked-out dependency source is now available for a later reconciliation pass.
 
 ## Layers
 
@@ -80,8 +80,8 @@ The handwritten port. 26 top-level units in `pc/src/` plus 17 UI units in `pc/sr
 
 ### 3. External dependencies (OBSERVED state)
 
-- `extern/aurora` → `https://github.com/encounter/aurora.git` at `7c8c6117…`, **not checked out**.
-- `extern/borealis` → `https://github.com/encounter/borealis.git` at `8e9427fa…`, **not checked out**.
+- `extern/aurora` → `https://github.com/encounter/aurora.git` at `7c8c6117…`, checked out in the verification tree.
+- `extern/borealis` → `https://github.com/encounter/borealis.git` at `8e9427fa…`, checked out in the verification tree.
 - `libs/dolphin/` is in-tree and contains `libs/dolphin/include/dolphin/` plus `libs/dolphin/src/` (`gx`, `mtx`, `pad`, `dvd`, `card`, `dsp`) (OBSERVED).
 - Aurora adds a Cargo/Corrosion build of an internal `nod` crate; `CMakeLists.txt` only patches it for Android and Apple (`corrosion_set_env_vars(nod …)`, `target nod-static`). That is Aurora's Rust, **not** `rust/nookery-core` (OBSERVED).
 
@@ -89,7 +89,7 @@ The handwritten port. 26 top-level units in `pc/src/` plus 17 UI units in `pc/sr
 
 Workspace at `rust/Cargo.toml`: edition 2024, `rust-version = "1.85"`, release profile `opt-level = 3`, `lto = "thin"`, `codegen-units = 1`, `panic = "abort"`, `strip = "symbols"`.
 
-Single crate `nookery-core` (925 lines), dependency-free, module per concern:
+The workspace currently contains three bounded crates. The crates are not wired into the CMake application.
 
 | Module | Public surface |
 |---|---|
@@ -99,9 +99,11 @@ Single crate `nookery-core` (925 lines), dependency-free, module per concern:
 | `status.rs` | `ErrorCode` (13 variants) with byte-for-byte upstream messages, `Status` |
 | `base.rs` | `BasePath` — `Unavailable` by design (executable discovery not ported) |
 
-The crate models `borealis::data` from its call sites in `acgc_data.cpp` and `pc/src/ui/settings.cpp` (`data_folder_error_message`), because Borealis is unpopulated. Documented divergences in `layout.rs`: `relative()` refuses absolute/`..` paths where upstream's `pc_platform_user_path` joins blindly — a deliberate hardening marked as such in the code.
+`nookery-save` contains the GCI directory/record/checksum validator and bounded save-file helpers. `nookery-config` contains scalar settings defaults/ranges, Borealis-style constraint behavior, legacy INI import, and JSON migration helpers. The current workspace gates pass for 18 `nookery-core` tests, 10 `nookery-save` unit tests, 5 save path tests, 16 town-record tests, and 23 `nookery-config` tests.
 
-**Integration status (OBSERVED):** no CMake file references `nookery-core`. `grep -rn 'nookery' CMakeLists.txt CMakePresets.json configure.py BUILDING.md` matches only the Windows manifest/Rc filenames and the macOS bundle identifier `com.flyngmt.nookery`. The crate builds and tests standalone (`cargo test` → 18 passed) and ships in no binary.
+The data crate models `borealis::data` from its call sites in `acgc_data.cpp` and `pc/src/ui/settings.cpp` (`data_folder_error_message`). Documented divergences in `layout.rs`: `relative()` refuses absolute/`..` paths where upstream's `pc_platform_user_path` joins blindly — a deliberate hardening marked as such in the code.
+
+**Integration status (OBSERVED):** no CMake file references any crate in `rust/`. `grep -rn 'nookery' CMakeLists.txt CMakePresets.json configure.py BUILDING.md` matches only the Windows manifest/Rc filenames and the macOS bundle identifier `com.flyngmt.nookery`. All three crates build and test standalone; none ships in the application binary.
 
 ## Subsystem boundaries the port must respect
 
@@ -141,14 +143,14 @@ Any Rust slice is only “done” when all eight cells still build **and** the u
 `panic = "abort"` in the release profile (OBSERVED). Consequences the port must design around:
 
 - A Rust panic kills the process; there is no unwinding across FFI and no `catch_unwind` safety net. Every `extern "C"` function must be total: validate inputs, return a status code, never index/divide/`unwrap` on unvalidated data.
-- `nookery-core` currently exposes no `extern "C"` surface at all (OBSERVED) — it is a pure Rust library. Introducing any FFI is a new, reviewable step, not a continuation.
+- The Rust workspace currently exposes no `extern "C"` surface at all (OBSERVED) — all three crates are pure Rust libraries. Introducing any FFI is a new, reviewable step, not a continuation.
 - Types crossing the boundary must be `#[repr(C)]` and own no Rust-only layout; `Status`/`PathError` are Rust enums and cannot be passed by value.
 
 ## Current candidate status
 
-**What is real:** the `nookery-core` data-folder primitive — layout, required-directory creation, migration planning, and byte-exact upstream status messages — with 18 passing unit tests against temp directories. It builds standalone and is wired into nothing.
+**What is real:** the `nookery-core` data-folder primitive; the `nookery-save` GCI directory/record/checksum validator; and the `nookery-config` scalar settings, legacy import, and JSON migration model. Their bounded workspace tests and Clippy gates pass. They build standalone and are wired into nothing.
 
-**What is not:** no disc, save/GCI, byteswap, settings, input, allocator, Famicom, UI, or boot code is ported. The shipped application is still entirely C/C++. The next slice is the data-manager I/O boundary behind a C ABI, followed by a fixture-based parity harness that compares Rust and C++ on the same `.gci` bytes.
+**What is not:** no CMake integration, data-manager C ABI, full save byteswap/card I/O, input, allocator, Famicom, disc, UI, or boot code is ported. The shipped application is still entirely C/C++. The next acceptance work is to reconcile and gate the active disc/input/arena/Famicom candidates, then build the first C ABI parity harness.
 
 ## Attribution and license
 
