@@ -47,8 +47,8 @@ Highest-risk-for-correctness slice: user saves must round-trip.
 | | |
 |---|---|
 | **Target** | `rust/nookery-save` + primitive `rust/nookery-bswap` first; `pc/src/pc_gci.c`, `pc/src/pc_save_bswap.c`, `pc/include/pc_gci.h`, `pc_save_bswap.h` remain the oracle |
-| **Slices** | (a) GCI header (`CARDDir`, 0x2000 blocks, rotation suffixes); (b) five typed `#[repr(C)]` LE↔BE leaf mirrors; (c) composite `Save_t`/ARAM LE↔BE swap; (d) card A/B directory resolution |
-| **Gate — current candidate** | GCI directory/record/checksum validation and bounded path/read tests pass; primitive endian/bitfield repackers match their C oracle; five typed save-byte-swap leaf mirrors pass 43 save tests, including size/alignment and round-trip vectors; this does not yet prove composite `Save_t`/ARAM byteswap or card I/O parity. |
+| **Slices** | (a) GCI header (`CARDDir`, 0x2000 blocks, rotation suffixes); (b) five typed `#[repr(C)]` LE↔BE leaf mirrors; (c) Mail name/header/content swaps; (d) composite `Save_t`/ARAM LE↔BE swap; (e) card A/B directory resolution |
+| **Gate — current candidate** | GCI directory/record/checksum validation and bounded path/read tests pass; primitive endian/bitfield repackers match their C oracle; five typed save-byte-swap leaf mirrors plus Mail name/header/content swaps pass 52 save tests, including size/alignment and round-trip vectors; this does not yet prove composite `Save_t`/quest/ARAM byteswap or card I/O parity. |
 | **Gate — round-trip** | For N real `.gci` files (user-supplied, never committed): C reads → Rust byteswaps → C reads must produce identical `Save_t`; and Rust write → C read → Rust read is stable. Any byte diff fails |
 | **Gate — failure modes** | `pc_save_result` states `PC_SAVE_MISSING` / `PC_SAVE_INVALID` / `PC_SAVE_IO_ERROR` reproduced for truncated, wrong-hash, and unreadable files |
 | **Gate — regression** | Existing C save path still loads a previously saved village (the C oracle is unchanged) |
@@ -132,7 +132,7 @@ This is a separate R3 feature track in addition to the 1:1 Rust port. It must ad
 
 | Item | Current state / required evidence |
 |---|---|
-| **Status** | **Not started — source and security architecture advisories complete**; no multiplayer crate, server, protocol, or deployed service exists in the current tree |
+| **Status** | **Bounded candidates integrated — source and security architecture advisories complete**; `nookery-social-proto` and `nookery-social-model` pass their local gates, but no network server, authentication, persistence, client integration, or deployed service exists in the current tree |
 | **Required surface** | Hosted towns, session discovery/join/leave, host/resident/visitor permissions, synchronized gameplay state, persistence/checkpoints, reconnect/recovery, and a client integration path through the real frame/input/save boundaries |
 | **Required gates** | Runnable client/server vertical slice; deterministic multi-client simulation; authorization and hostile-packet negative tests; crash-safe persistence/recovery; reconnect and duplicate-delivery tests; offline regression; platform/user-path checks; no asset or proprietary-protocol dependency |
 | **Acceptance boundary** | Architecture prose or a compiling server crate is not completion. Acceptance requires an exercised hosted-town user path with exact candidate identity, fresh security gates, and separately authorized deployment/effect records |
@@ -162,5 +162,6 @@ An optimization is accepted only with a row here showing the metric, the before/
 | 6 | Disc + content | **Candidate — catalog/header/hash + texture path seams; Aurora format decoding, texture runtime, indexing, and user path not started** |
 | 7 | UI + platform services | Not started |
 | 8 | Boot + integration | Not started |
+| 9 | Hosted-town multiplayer | **Candidate — bounded clean-room frame codec + authority model; server, persistence, auth, reconnect, client/game integration, and multi-client runtime not started** |
 
 “Candidate” means the primitive exists and passes its own unit tests; it does **not** mean the user path is ported. See [`PORTING_RUST.md`](./PORTING_RUST.md) for the measured evidence behind each row.

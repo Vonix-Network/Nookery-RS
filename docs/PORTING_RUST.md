@@ -8,7 +8,7 @@ This file is the **architecture map**: what exists, where it lives, and what is 
 
 Every claim below is tagged:
 
-- **OBSERVED** — read from the Rust-slice integration pin `9f8874d272f455dc2144f37b91077fb9c7f60c17`.
+- **OBSERVED** — read from the Rust-slice integration pin `f8e2a13a6199f2eec301bd1c7f71f02ee8cf9db8`.
 - **INFERRED** — a conclusion drawn from observed call sites, not from a specification.
 - **UNKNOWN** — not determinable at this pin (usually because a submodule is unpopulated).
 
@@ -18,7 +18,7 @@ When a statement has no tag it restates the project constraints in [Scope](#scop
 
 - Preserve the observable behavior and supported platform matrix of Nookery.
 - Permit only measured RAM/CPU optimizations that do not change gameplay, save formats, input behavior, rendering behavior, or supported user workflows.
-- Keep the existing C/C++ implementation available while Rust slices are migrated and verified. **A Rust crate compiling is not evidence that the corresponding user path has been ported.**
+- Keep the existing C/C++ implementation available while Rust slices are migrated and verified; remove a source unit only when the dedicated cleanup gate in [`PORT_CLEANUP_LEDGER.md`](./PORT_CLEANUP_LEDGER.md) closes. **A Rust crate compiling is not evidence that the corresponding user path has been ported.**
 - Do not include or distribute game assets; users must provide a legally obtained supported disc image, as in upstream. `assets/` (980 KiB, OBSERVED) holds only port-owned resources, not game data.
 
 ## Measured scale
@@ -34,7 +34,7 @@ OBSERVED at the pinned commit (`du -sh`, `find … | wc -l`, `cat | wc -l`):
 | `extern/aurora/` | — | — | — | Aurora submodule, checked out at the pinned gitlink |
 | `extern/borealis/` | — | — | — | Borealis submodule, checked out at the pinned gitlink |
 | `assets/` | 980 KiB | — | — | Port-owned assets only |
-| `rust/` | — | 108 | 19 481 | Rust workspace (`nookery-core`, `nookery-save`, `nookery-input`, `nookery-config`, `nookery-famicom`, `nookery-bswap`, `nookery-arena`, `nookery-disc`, `nookery-texture`, `nookery-data-ffi`) |
+| `rust/` | — | 113 | 21 616 | Rust workspace (`nookery-core`, `nookery-save`, `nookery-input`, `nookery-config`, `nookery-famicom`, `nookery-bswap`, `nookery-arena`, `nookery-disc`, `nookery-texture`, `nookery-data-ffi`, `nookery-social-proto`, `nookery-social-model`) |
 
 The current verification checkout reports Aurora `7c8c6117eb4061d35aacd10613ed5a0f0ef02727` and Borealis `8e9427fab92c1935a5d6bacadc6053c687f10c1e`, both checked out. The original `nookery-core` data model was authored from call sites; checked-out dependency source is now available for a later reconciliation pass.
 
@@ -70,7 +70,7 @@ The handwritten port. 26 top-level units in `pc/src/` plus 17 UI units in `pc/sr
 | **Texture paths** | `pc/src/acgc_texture_replacements.cpp` (path seam), `pc/include/acgc/texture_replacements.hpp`; `rust/nookery-texture` | Exact primary → cwd → base-relative directory selection; Aurora texture registration, decoding, GPU integration, and reload remain open |
 | **Save / GCI** | `pc/src/pc_gci.c` (600), `pc/include/pc_gci.h`, `pc_gci_dir.h` | GCI container: 0x2000-block `CARDDir` header, `DobutsunomoriP_MURA.gci`, rotation suffixes (`.bak1..3`, `.temp`, `.write`) |
 | **Memory card** | `pc/src/pc_m_card.c` (1 133) | Card A/B mounts, village generation, ARAM blocks |
-| **Save byteswap** | `pc/src/pc_save_bswap.c` (1 180), `pc/include/pc_save_bswap.h`; `rust/nookery-bswap`, `rust/nookery-save/src/typed_swap.rs` | Rust primitive endian/bitfield repackers are C-oracle checked; five `#[repr(C)]` leaf mirrors (RTC, personal IDs, animal IDs, land info) have tested bidirectional LE↔BE swaps; composite `Save_t`, Mail, quest, and ARAM walkers remain unported |
+| **Save byteswap** | `pc/src/pc_save_bswap.c` (1 180), `pc/include/pc_save_bswap.h`; `rust/nookery-bswap`, `rust/nookery-save/src/typed_swap.rs` | Rust primitive endian/bitfield repackers are C-oracle checked; five `#[repr(C)]` leaf mirrors plus `Mail_nm_c`, `Mail_hdr_c`, and `Mail_c` have tested bidirectional LE↔BE swaps; composite `Save_t`, quest, ARAM walkers, and card I/O remain unported |
 | **Settings** | `pc/src/acgc_settings.cpp` (458), `pc/include/pc_settings.h`, `pc/include/acgc/settings.hpp` | `PCSettings` struct (`window_width`, `vsync`, `max_fps`, deadzones, `nes_aspect`, …); Aurora/Borealis config codec |
 | **Input** | `pc/src/acgc_input_profiles.cpp` (97), `acgc_controller_ports.cpp`, `acgc_legacy_input.cpp`, `pc/include/acgc/input_profiles.hpp`, `controller_ports.hpp`, `legacy_input.hpp`; `rust/nookery-input` | Bounded Rust default maps, direction editing, conflict validation, SDL-name translation, and legacy INI migration; live SDL/Aurora/PADStatus/controller-port integration remains open |
 | **Famicom** | `pc/src/pc_nes_fixnes.c` (454), `pc/lib/fixnes/` | fixNES (MIT, FIX94) adapted as a 256×240 RGB565 library; audio via `AIInitDMA` |
@@ -90,7 +90,7 @@ The handwritten port. 26 top-level units in `pc/src/` plus 17 UI units in `pc/sr
 
 Workspace at `rust/Cargo.toml`: edition 2024, `rust-version = "1.85"`, release profile `opt-level = 3`, `lto = "thin"`, `codegen-units = 1`, `panic = "abort"`, `strip = "symbols"`.
 
-The workspace currently contains ten bounded crates. The crates are not wired into the CMake application.
+The workspace currently contains twelve bounded crates. The crates are not wired into the CMake application.
 
 | Module | Public surface |
 |---|---|
@@ -101,12 +101,14 @@ The workspace currently contains ten bounded crates. The crates are not wired in
 | `base.rs` | `BasePath` — `Unavailable` by design (executable discovery not ported) |
 | `nookery-input` | `Binding`, `ProfileStore`, exact keyboard defaults, direction editing, conflict validation, SDL name translation, and legacy INI migration; no live SDL/Aurora/PADStatus integration |
 | `nookery-texture` | `resolve_texture_pack_path` — exact primary/cwd/base-relative directory precedence; no Aurora texture runtime |
+| `nookery-social-proto` | Opaque versioned frame envelope and incremental stream decoder; no sockets, authentication, cryptography, persistence, or game/save payload interpretation |
+| `nookery-social-model` | Bounded clean-room hosted-town authority state with owner/visitor/moderator roles, revisions, presence, public items, and request replay checks; no server, persistence, auth, or client integration |
 
-`nookery-save` contains the GCI directory/record/checksum validator, bounded save-file helpers, and five source-grounded `#[repr(C)]` typed byte-swap leaf mirrors. `nookery-input` contains the bounded input-profile, default-binding, direction-editing, conflict-validation, SDL-name, and legacy-INI model. `nookery-config` contains scalar settings defaults/ranges, Borealis-style constraint behavior, legacy INI import, and JSON migration helpers. `nookery-famicom` contains the source-verified ROM catalog, exit/countdown state machine, frame-action ordering, and PC arena/cleanup contract; it does not contain an emulator. `nookery-bswap` contains primitive endian/bitfield helpers with a C oracle harness; `nookery-arena` contains bounded GameAlloc/TwoHeadArena models with a fixed-seed C parity fixture; `nookery-disc` contains bounded disc catalog/header/hash verification seams without Aurora image decoding; `nookery-texture` contains exact texture-pack path selection without Aurora runtime behavior; and `nookery-data-ffi` contains a C ABI/staticlib candidate over the data-folder primitives with a 219-check C harness. The current workspace gates pass for 18 `nookery-core` tests, 43 save tests, 37 input tests, 23 `nookery-config` tests, 53 Famicom tests, 21 bswap tests, 56 arena tests, 52 disc tests, 6 texture tests, and 37 data-FFI tests plus the 219-check harness (346 listed Rust tests total).
+`nookery-save` contains the GCI directory/record/checksum validator, bounded save-file helpers, five source-grounded `#[repr(C)]` typed byte-swap leaf mirrors, and Mail name/header/content swaps. `nookery-input` contains the bounded input-profile, default-binding, direction-editing, conflict-validation, SDL-name, and legacy-INI model. `nookery-config` contains scalar settings defaults/ranges, Borealis-style constraint behavior, legacy INI import, and JSON migration helpers. `nookery-famicom` contains the source-verified ROM catalog, exit/countdown state machine, frame-action ordering, and PC arena/cleanup contract; it does not contain an emulator. `nookery-bswap` contains primitive endian/bitfield helpers with a C oracle harness; `nookery-arena` contains bounded GameAlloc/TwoHeadArena models with a fixed-seed C parity fixture; `nookery-disc` contains bounded disc catalog/header/hash verification seams without Aurora image decoding; `nookery-texture` contains exact texture-pack path selection without Aurora runtime behavior; `nookery-data-ffi` contains a C ABI/staticlib candidate over the data-folder primitives with a 219-check C harness; `nookery-social-proto` contains an opaque versioned frame envelope/incremental decoder; and `nookery-social-model` contains bounded hosted-town authority state, roles, revisions, presence, public items, and request replay checks. The current workspace gates pass for 18 `nookery-core` tests, 52 save tests, 37 input tests, 23 `nookery-config` tests, 53 Famicom tests, 21 bswap tests, 56 arena tests, 52 disc tests, 6 texture tests, 37 data-FFI tests, 10 social-proto tests, and 12 social-model tests plus the 219-check harness (377 listed Rust tests total).
 
 The data crate models `borealis::data` from its call sites in `acgc_data.cpp` and `pc/src/ui/settings.cpp` (`data_folder_error_message`). Documented divergences in `layout.rs`: `relative()` refuses absolute/`..` paths where upstream's `pc_platform_user_path` joins blindly — a deliberate hardening marked as such in the code.
 
-**Integration status (OBSERVED):** no CMake file references any crate in `rust/`. `grep -rn 'nookery' CMakeLists.txt CMakePresets.json configure.py BUILDING.md` matches only the Windows manifest/Rc filenames and the macOS bundle identifier `com.flyngmt.nookery`. All ten crates build and test in the Rust workspace; none ships in the application binary.
+**Integration status (OBSERVED):** no CMake file references any crate in `rust/`. `grep -rn 'nookery' CMakeLists.txt CMakePresets.json configure.py BUILDING.md` matches only the Windows manifest/Rc filenames and the macOS bundle identifier `com.flyngmt.nookery`. All twelve crates build and test in the Rust workspace; none ships in the application binary.
 
 ## Subsystem boundaries the port must respect
 
@@ -146,14 +148,14 @@ Any Rust slice is only “done” when all eight cells still build **and** the u
 `panic = "abort"` in the release profile (OBSERVED). Consequences the port must design around:
 
 - A Rust panic kills the process; there is no unwinding across FFI and no `catch_unwind` safety net. Every `extern "C"` function must be total: validate inputs, return a status code, never index/divide/`unwrap` on unvalidated data.
-- The Rust workspace now exposes the `nookery-data-ffi` `extern "C"` candidate surface; the other nine crates remain pure Rust libraries. It is not yet linked into the application, so introducing production FFI wiring is still a new, reviewable step.
+- The Rust workspace now exposes the `nookery-data-ffi` `extern "C"` candidate surface; the other eleven crates remain pure Rust libraries. It is not yet linked into the application, so introducing production FFI wiring is still a new, reviewable step.
 - Types crossing the boundary must be `#[repr(C)]` and own no Rust-only layout; `Status`/`PathError` are Rust enums and cannot be passed by value.
 
 ## Current candidate status
 
-**What is real:** the `nookery-core` data-folder primitive and `nookery-data-ffi` ABI candidate; the `nookery-save` GCI directory/record/checksum validator plus five typed save-byte-swap leaf mirrors; the bounded `nookery-input` profile/default/edit/conflict/legacy model; the bounded `nookery-texture` primary/cwd/base-relative path resolver; the `nookery-config` scalar settings, legacy import, and JSON migration model; the bounded `nookery-famicom` host seam; the primitive `nookery-bswap` C-oracle slice; the bounded `nookery-arena` model/parity fixture; and the bounded `nookery-disc` catalog/header/hash slice. Their bounded workspace tests, Clippy gates, bswap/arena oracle harnesses, and data-FFI C harness pass. They build and test in the Rust workspace but remain unwired to CMake/the shipped application.
+**What is real:** the `nookery-core` data-folder primitive and `nookery-data-ffi` ABI candidate; the `nookery-save` GCI directory/record/checksum validator, five typed save-byte-swap leaf mirrors, and Mail record swap slice; the bounded `nookery-input` profile/default/edit/conflict/legacy model; the bounded `nookery-texture` primary/cwd/base-relative path resolver; the `nookery-config` scalar settings, legacy import, and JSON migration model; the bounded `nookery-famicom` host seam; the primitive `nookery-bswap` C-oracle slice; the bounded `nookery-arena` model/parity fixture; the bounded `nookery-disc` catalog/header/hash slice; the opaque `nookery-social-proto` frame codec; and the bounded `nookery-social-model` hosted-town authority slice. Their bounded workspace tests, Clippy gates, bswap/arena oracle harnesses, and data-FFI C harness pass. They build and test in the Rust workspace but remain unwired to CMake/the shipped application.
 
-**What is not:** no CMake integration or C++ parity for the data-manager ABI, composite `Save_t`/Mail/quest/ARAM byteswap or card I/O, live SDL/Aurora/PADStatus input, runtime-compatible game allocator, NES emulator/fixNES boundary, Aurora texture registration/decoding/GPU/reload behavior, UI, boot code, or multiplayer service is ported. The shipped application is still entirely C/C++. The next acceptance work is input runtime/C++ parity, composite save/card parity, texture runtime integration, and wiring the first C ABI through CMake; the separate hosted-town multiplayer requirement has complete source/security advisories but no implementation.
+**What is not:** no CMake integration or C++ parity for the data-manager ABI, composite `Save_t`/quest/ARAM byteswap or card I/O, live SDL/Aurora/PADStatus input, runtime-compatible game allocator, NES emulator/fixNES boundary, Aurora texture registration/decoding/GPU/reload behavior, UI, boot code, or multiplayer server/authentication/persistence/client service is ported. The shipped application is still entirely C/C++. The social crates are bounded clean-room candidates, not a runnable hosted-town feature and not compatible with Nintendo services. The next acceptance work is input runtime/C++ parity, composite save/card parity, texture runtime integration, wiring the first C ABI through CMake, and extending the separate hosted-town track through a real vertical slice.
 
 ## Attribution and license
 
