@@ -32,10 +32,11 @@ The `nookery-core` logic is real but unreachable from the application. Make it c
 
 | | |
 |---|---|
-| **Target** | `rust/nookery-core` + a thin `extern "C"` shim; CMake target linking it |
+| **Target** | `rust/nookery-core` + `rust/nookery-data-ffi` thin `extern "C"` shim; CMake target linking it |
 | **Slices** | (a) `#[repr(C)]` layout/status structs; (b) `nookery_data_initialize` / `nookery_data_plan_migration`; (c) CMake `add_library(nookery_core …)` wired into `acgc` |
 | **Non-goals** | Window-system handoff (`open_data_path`), restart flow, `set_custom_data_path` |
 | **Gate — build** | All eight CI cells still produce a binary |
+| **Gate — current candidate** | The ABI header/layout and Rust-to-C harness pass 37 Rust tests plus 219 checks; the C++ `acgc::data::initialize` parity run and CMake application linkage are not yet proven. |
 | **Gate — behavior** | A parity harness runs the C++ `acgc::data::initialize` and the Rust shim against the same temp root; directory sets, `required_directories` order, and every `ErrorCode` message string are byte-identical. Mutation check: corrupt one Rust message string → harness fails |
 | **Fallback** | `acgc_data.cpp` unchanged and still the default path until the gate passes |
 
@@ -153,7 +154,7 @@ An optimization is accepted only with a row here showing the metric, the before/
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Baseline pin + crate tests | **Partial — host CMake gate blocked** |
-| 1 | Data-folder C ABI + parity harness | Candidate (crate logic exists, unwired) |
+| 1 | Data-folder C ABI + parity harness | **Candidate — ABI + Rust/C harness pass; C++ parity and CMake linkage unproven** |
 | 2 | Save/GCI + byteswap | **Candidate — GCI validator + primitive bswap only; typed `Save_t`/ARAM/card I/O parity not started** |
 | 3 | Settings + input | **Candidate — settings model only; input not started** |
 | 4 | Allocator / arenas | **Candidate — bounded model + fixed-seed C parity; runtime ABI and workload gates not started** |
