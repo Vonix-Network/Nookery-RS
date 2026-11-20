@@ -47,8 +47,8 @@ Highest-risk-for-correctness slice: user saves must round-trip.
 | | |
 |---|---|
 | **Target** | `rust/nookery-save` + primitive `rust/nookery-bswap` first; `pc/src/pc_gci.c`, `pc/src/pc_save_bswap.c`, `pc/include/pc_gci.h`, `pc_save_bswap.h` remain the oracle |
-| **Slices** | (a) GCI header (`CARDDir`, 0x2000 blocks, rotation suffixes); (b) `Save_t`/ARAM LE↔BE swap; (c) card A/B directory resolution |
-| **Gate — current candidate** | GCI directory/record/checksum validation and bounded path/read tests pass; primitive endian/bitfield repackers match their C oracle; this does not yet prove full `Save_t` byteswap or card I/O parity. |
+| **Slices** | (a) GCI header (`CARDDir`, 0x2000 blocks, rotation suffixes); (b) five typed `#[repr(C)]` LE↔BE leaf mirrors; (c) composite `Save_t`/ARAM LE↔BE swap; (d) card A/B directory resolution |
+| **Gate — current candidate** | GCI directory/record/checksum validation and bounded path/read tests pass; primitive endian/bitfield repackers match their C oracle; five typed save-byte-swap leaf mirrors pass 43 save tests, including size/alignment and round-trip vectors; this does not yet prove composite `Save_t`/ARAM byteswap or card I/O parity. |
 | **Gate — round-trip** | For N real `.gci` files (user-supplied, never committed): C reads → Rust byteswaps → C reads must produce identical `Save_t`; and Rust write → C read → Rust read is stable. Any byte diff fails |
 | **Gate — failure modes** | `pc_save_result` states `PC_SAVE_MISSING` / `PC_SAVE_INVALID` / `PC_SAVE_IO_ERROR` reproduced for truncated, wrong-hash, and unreadable files |
 | **Gate — regression** | Existing C save path still loads a previously saved village (the C oracle is unchanged) |
