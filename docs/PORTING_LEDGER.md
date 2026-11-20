@@ -60,9 +60,9 @@ Frozen on-disk and in-memory contracts.
 
 | | |
 |---|---|
-| **Target** | `rust/nookery-config` first; `pc/src/acgc_settings.cpp`, `pc/include/pc_settings.h`, `pc/src/acgc_input_profiles.cpp`, `src/padmgr.c` remain the oracle |
-| **Slices** | (a) `PCSettings` field order + `config.json` codec keys; (b) keyboard/gamepad default maps; (c) deadzone math |
-| **Gate — current candidate** | Scalar defaults/ranges, Borealis-style constraints, legacy INI import, and JSON migration tests pass. Real-install round-trip and C ABI parity are not yet proven. |
+| **Target** | `rust/nookery-config` and bounded `rust/nookery-input` first; `pc/src/acgc_settings.cpp`, `pc/include/pc_settings.h`, `pc/src/acgc_input_profiles.cpp`, `src/padmgr.c` remain the oracle |
+| **Slices** | (a) `PCSettings` field order + `config.json` codec keys; (b) keyboard/gamepad default maps; (c) direction editing, conflict validation, and legacy migration; (d) live deadzone/PADStatus math |
+| **Gate — current candidate** | Scalar defaults/ranges, Borealis-style constraints, legacy INI import, JSON migration, exact input defaults, direction editing, conflict validation, SDL-name translation, and malformed-input handling pass 23 config plus 37 input tests. Real-install round-trip, live SDL/Aurora/PADStatus behavior, controller-port integration, and C ABI parity are not yet proven. |
 | **Gate — config** | Round-trip an existing `config.json` and `settings.ini` from a real install: every key and value preserved; unknown keys retained, not dropped |
 | **Gate — input** | Same controller input sequence yields identical `PADStatus` bytes from C and Rust across the deadzone boundary (0, at-threshold, above-threshold) |
 | **Gate — platform** | Touch-control layouts on Android/iOS still render and the layout editor still saves |
@@ -132,7 +132,7 @@ This is a separate R3 feature track in addition to the 1:1 Rust port. It must ad
 
 | Item | Current state / required evidence |
 |---|---|
-| **Status** | **Not started — source and security architecture advisories in flight**; no multiplayer crate, server, protocol, or deployed service exists in the current tree |
+| **Status** | **Not started — source and security architecture advisories complete**; no multiplayer crate, server, protocol, or deployed service exists in the current tree |
 | **Required surface** | Hosted towns, session discovery/join/leave, host/resident/visitor permissions, synchronized gameplay state, persistence/checkpoints, reconnect/recovery, and a client integration path through the real frame/input/save boundaries |
 | **Required gates** | Runnable client/server vertical slice; deterministic multi-client simulation; authorization and hostile-packet negative tests; crash-safe persistence/recovery; reconnect and duplicate-delivery tests; offline regression; platform/user-path checks; no asset or proprietary-protocol dependency |
 | **Acceptance boundary** | Architecture prose or a compiling server crate is not completion. Acceptance requires an exercised hosted-town user path with exact candidate identity, fresh security gates, and separately authorized deployment/effect records |
@@ -156,7 +156,7 @@ An optimization is accepted only with a row here showing the metric, the before/
 | 0 | Baseline pin + crate tests | **Partial — host CMake gate blocked** |
 | 1 | Data-folder C ABI + parity harness | **Candidate — ABI + Rust/C harness pass; C++ parity and CMake linkage unproven** |
 | 2 | Save/GCI + byteswap | **Candidate — GCI validator + primitive bswap only; typed `Save_t`/ARAM/card I/O parity not started** |
-| 3 | Settings + input | **Candidate — settings model only; input not started** |
+| 3 | Settings + input | **Candidate — settings model + bounded input profile/legacy slice; live SDL/PADStatus/controller integration not started** |
 | 4 | Allocator / arenas | **Candidate — bounded model + fixed-seed C parity; runtime ABI and workload gates not started** |
 | 5 | Famicom boundary | **Candidate — host seam only; emulator/fixNES not started** |
 | 6 | Disc + content | **Candidate — catalog/header/hash seam; Aurora format decoding, texture indexing, and user path not started** |
