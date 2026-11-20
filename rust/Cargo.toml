@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["nookery-core"]
+members = ["nookery-core", "nookery-save"]
 
 [workspace.package]
 edition = "2024"
