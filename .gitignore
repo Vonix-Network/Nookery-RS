@@ -20,6 +20,7 @@ orig/*/*
 
 # Build files
 /build*/
+/rust/target/
 .ninja_*
 build.ninja
 
