@@ -163,7 +163,11 @@ impl CardDir {
     /// a NUL.  Trailing bytes after that NUL are ignored, exactly as
     /// `memcmp(dir->fileName, file_name, length + 1)` ignores them.
     pub fn matches_file_name(&self, name: &[u8]) -> bool {
-        if name.is_empty() || name.len() >= FILE_NAME_MAX || name.contains(&0) {
+        // The C source applies strlen() to a NUL-terminated name.  Empty
+        // names therefore remain valid at this low-level seam when the field
+        // begins with NUL; callers that require a concrete record name should
+        // use validate_record_name or compare their required constant.
+        if name.len() >= FILE_NAME_MAX || name.contains(&0) {
             return false;
         }
         if !self.game_name().starts_with(b"GAF") {
@@ -285,6 +289,11 @@ mod tests {
         // Wrong game name.
         let other = CardDir::from_bytes(header_with(b"DobutsunomoriP_MURA", b"GAME"));
         assert!(!other.matches_file_name(b"DobutsunomoriP_MURA"));
+        // Empty names follow strlen("") in the C helper: they match only
+        // when the stored field starts with its NUL terminator.
+        let empty = CardDir::from_bytes(header_with(b"", b"GAFE"));
+        assert!(empty.matches_file_name(b""));
+        assert!(!dir.matches_file_name(b""));
         // Interior NUL is impossible for a C string.
         assert!(!dir.matches_file_name(b"Dobut\0somoriP_MURA"));
     }
