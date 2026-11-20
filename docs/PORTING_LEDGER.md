@@ -1,6 +1,6 @@
 # Nookery-RS phased ledger
 
-Execution plan for the Rust port. The architecture map — what exists and where — is in [`PORTING_RUST.md`](./PORTING_RUST.md).
+Execution plan for the Rust port. The architecture map — what exists and where — is in [`PORTING_RUST.md`](./PORTING_RUST.md). Source-removal decisions are tracked separately in [`PORT_CLEANUP_LEDGER.md`](./PORT_CLEANUP_LEDGER.md).
 
 ## Rules of engagement
 
@@ -10,7 +10,7 @@ These hold for every phase. A phase that violates one is not done, regardless of
 2. **Observable gate, not a vibe.** Each phase lists the exact command or user action that proves it, and what output counts as pass. "Tests pass" alone is insufficient; state what the test would fail on.
 3. **No assets.** Never add, modify, or commit game data, ROMs, disc images, or extracted textures. Fixtures for save-format tests are synthetic or user-supplied at test time only.
 4. **Upstream credits and licenses stay.** CC0 decompilation, MIT port layer, MIT fixNES, and the Aurora/Borealis licenses are preserved in every touched file.
-5. **C/C++ stays available.** No phase deletes a C implementation before the Rust replacement passes the same gate. The C path is the oracle, not dead code, until parity is signed off.
+5. **C/C++ stays until the deletion gate.** No phase deletes a C implementation while the Rust work is only a bounded helper, isolated model, or unactivated crate. The C path remains the oracle until the complete replacement, production callers, platform/user-path gates, and dedicated cleanup commit satisfy [`PORT_CLEANUP_LEDGER.md`](./PORT_CLEANUP_LEDGER.md).
 6. **Optimize only after parity, only with measurements.** A change must come with before/after numbers on the same workload and must not alter save bytes, input timing, or frame output.
 7. **Panic never crosses FFI.** `panic = "abort"`; every `extern "C"` entry validates and returns a status. No `unwrap`/index on untrusted input.
 8. **Truthful status.** A slice compiles ≠ ported. Ledger state moves only when its gate is observed to pass on the listed platforms.
