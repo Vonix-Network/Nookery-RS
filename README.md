@@ -2,8 +2,14 @@
     <img src="assets/nookery-logo.png" alt="Nookery" width="800">
 </div>
 
-Nookery (formerly known as ACGC-PC-Port) is a native Windows/Linux/macOS/Android/iOS port of Animal Crossing (GameCube), based on the
+Nookery-RS is a Rust port of [Nookery](https://github.com/flyngmt/Nookery), a native Windows/Linux/macOS/Android/iOS port of Animal Crossing (GameCube), based on the
 [ac-decomp](https://github.com/ACreTeam/ac-decomp) decompilation.
+
+This repository is a fork of the original Nookery project. We are porting it
+incrementally to Rust while preserving behavior and giving full credit to the
+upstream project, ACreTeam, Aurora/Borealis, and all original contributors.
+See [docs/PORTING_RUST.md](docs/PORTING_RUST.md) for the source-grounded port
+ledger and current status.
 
 This repository contains no game assets. A legally obtained GAFE01 Rev 0 (USA)
 disc image is required. RVZ, ISO, CISO and GCM images are supported.
