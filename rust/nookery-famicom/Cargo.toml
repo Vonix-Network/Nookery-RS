@@ -1,0 +1,16 @@
+[package]
+name = "nookery-famicom"
+version = "0.1.0"
+description = "Bounded Famicom/NES host seam: ROM catalog, exit state machine, frame actions, arena plan"
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+
+# Intentionally NOT a member of ../Cargo.toml yet: the parent workspace
+# integrates this crate later.  This empty table keeps standalone
+# `cargo <gate> --manifest-path rust/nookery-famicom/Cargo.toml` working
+# while ../Cargo.toml does not list us.  Remove it when adding the crate to
+# the parent `members` list.
+[workspace]
+
+[dependencies]
