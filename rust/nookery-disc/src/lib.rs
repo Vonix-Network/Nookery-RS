@@ -80,6 +80,7 @@ pub mod log;
 pub mod metadata;
 pub mod status;
 pub mod stream_verify;
+pub mod yaz0;
 
 pub use catalog::{AcceptedDisc, Catalog, UPSTREAM};
 pub use engine::{HASH_BUFFER_SIZE, inspect, inspect_error, verify, verify_simple};
@@ -95,4 +96,7 @@ pub use status::Status;
 pub use stream_verify::{
     CISO_HEADER_SIZE, CISO_MAGIC, CISO_MIN_BLOCK_SIZE, ContainerKind, ContainerMetadata, RVZ_MAGIC,
     StreamVerifyError, inspect_path, inspect_stream, verify_path,
+};
+pub use yaz0::{
+    HEADER_SIZE as YAZ0_HEADER_SIZE, MAGIC as YAZ0_MAGIC, Yaz0Error, decode as yaz0_decode,
 };

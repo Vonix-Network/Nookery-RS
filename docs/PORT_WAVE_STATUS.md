@@ -56,3 +56,9 @@ The parent may add further disjoint game/data/UI lanes after the first cohort is
 - Explicitly open: remaining 6502 opcodes, non-zero mappers, iNES clamp parity for over-declared headers, PRG RAM and `$4014` DMA, APU waveforms, NMI/IRQ timing, fixNES PPU-dot cadence parity, CMake/application activation, and real ROM visual/audio parity.
 
 This wave is **ASSIGNED / NOT ACCEPTED** until exact candidate identities, changed paths, gates, and blockers are read back. No external effects are authorized by this record.
+
+### Differential harness
+
+`tools/yaz0-oracle` holds `aurora_yaz0_decode` copied verbatim from `pc/src/pc_assets.c:47-94` together with `pc_load_be32` from `pc_bswap.h`, so the comparison reference is the real implementation rather than a paraphrase. `rust/nookery-disc/src/yaz0.rs` is the port, and `tests/yaz0_differential.rs` requires an identical decoded size, an identical FNV-1a64 digest, and an identical rejection reason for every supplied fixture.
+
+Observed on the owner-supplied `GAFE01` disc, `files/foresta.rel.szs`: 6,137,393 bytes in, 15,640,056 bytes out, digest `322cd015b52e4005`, matching from both decoders. Fixtures are supplied at run time and never committed; the harness skips loudly when absent so a bare workspace test run stays green without game data while never implying the comparison ran.

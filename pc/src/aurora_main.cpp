@@ -300,6 +300,7 @@ void show_console() {
 struct CommandLine {
     std::string discPath;
     bool discPathExplicit = false;
+    bool allowCpuAdapter = false;
 };
 
 enum class ParseOutcome { Run, Exit, Failed };
@@ -320,6 +321,8 @@ ParseOutcome parse_command_line(int argc, char* argv[], CommandLine* out) {
         ("framelimit", "Set a software frame limit (0 = uncapped)", cxxopts::value<std::string>())
         ("time", "Override the in-game clock, H[:M[:S]]", cxxopts::value<std::string>())
         ("date", "Override the in-game date, M/D[/Y]", cxxopts::value<std::string>())
+        ("allow-cpu-adapter", "Allow a CPU (software) WebGPU adapter; needed on hosts with no usable GPU such as headless CI",
+            cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
         ("rain", "Force rain, optionally =light, =normal or =heavy",
             cxxopts::value<std::string>()->implicit_value("heavy"));
     options.parse_positional({"disc"});
@@ -361,6 +364,8 @@ ParseOutcome parse_command_line(int argc, char* argv[], CommandLine* out) {
         out->discPath = parsed["disc"].as<std::string>();
         out->discPathExplicit = true;
     }
+
+    out->allowCpuAdapter = parsed["allow-cpu-adapter"].as<bool>();
 
     if (parsed.count("framelimit")) {
         int limit = -1;
@@ -589,6 +594,12 @@ int main(int argc, char* argv[]) {
     config.vsync = true;
 #endif
     config.pauseOnFocusLost = false;
+    // `AuroraConfig config{}` zero-initialises `allowCpuAdapter` to false and
+    // nothing assigned it, so a host with no usable GPU (headless CI, a VM, or
+    // a machine without working DRI) could only fall back to the Null backend
+    // and never present a frame.  Expose it as an explicit opt-in rather than
+    // changing the default renderer preference.
+    config.allowCpuAdapter = commandLine.allowCpuAdapter;
     config.allowJoystickBackgroundEvents = settings.input.allowBackgroundInput.get();
     config.logCallback = borealis::log::aurora_callback();
     config.logLevel = borealis::log::to_aurora_level(s_log_level);

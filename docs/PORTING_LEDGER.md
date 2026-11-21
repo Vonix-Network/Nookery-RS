@@ -101,7 +101,7 @@ Third-party emulator; integrate, do not rewrite.
 |---|---|
 | **Target** | `pc/src/acgc_disc.cpp`, `pc/src/acgc_texture_replacements.cpp`, asset pipeline; bounded seams in `rust/nookery-disc` and `rust/nookery-texture` |
 | **Slices** | (a) accepted-disc catalog + xxh3-128 check; (b) exact texture-pack primary/cwd/base-relative path selection; (c) HD texture pack indexing |
-| **Gate — current candidate** | Rust catalog/header/hash classification, bounded RVZ/CISO metadata inspection, raw ISO/GCM stream verification, and bounded read/error behavior pass 60 disc tests; texture path precedence, non-directory handling, and deterministic PNG/DDS indexing pass 10 texture tests; no successful Aurora RVZ/ISO/CISO/GCM decode, texture registration, or user-path launch is claimed. |
+| **Gate — current candidate** | Rust catalog/header/hash classification, bounded RVZ/CISO metadata inspection, raw ISO/GCM stream verification, and bounded read/error behavior pass 60 disc tests; texture path precedence, non-directory handling, and deterministic PNG/DDS indexing pass 10 texture tests; Yaz0 decoding is proven byte-identical to the C oracle on a real `foresta.rel.szs` via `tools/yaz0-oracle`; no successful Aurora RARC archive parse, texture registration, or user-path launch is claimed. |
 | **Gate** | All four image formats (RVZ, ISO, CISO, GCM) accepted; wrong-hash disc rejected with the same error; texture replacement for a known pack resolves identically |
 | **Constraint** | Never ship a disc image or extracted assets; tests use user-supplied input or a synthetic hash fixture |
 
@@ -159,7 +159,7 @@ An optimization is accepted only with a row here showing the metric, the before/
 | 3 | Settings + input | **Candidate — settings model + `#[repr(C)]` PCSettings ABI with oracle-identical layout and `config.json` codec (70-check C harness) + profile/legacy/controller/PAD runtime slice; live SDL/PADStatus wiring and C++ consumer migration open** |
 | 4 | Allocator / arenas | **Candidate — bounded model + fixed-seed C parity; runtime ABI and workload gates not started** |
 | 5 | Famicom boundary | **Candidate — host seam plus native mapper-0 runtime with official 6502 opcode/addressing, stack/control-flow, RMW, page-crossing, indirect-JMP behavior, and PPU register/memory plus background+sprite rendering; APU waveforms, DMA cycle stealing, NMI/IRQ timing, fixNES dot-cadence parity, remaining opcodes/mappers, and application activation remain open** |
-| 6 | Disc + content | **Candidate — catalog/header/hash + bounded RVZ/CISO/raw stream verification + texture path/index seams; Aurora format decoding, texture runtime, and user path open** |
+| 6 | Disc + content | **Candidate — catalog/header/hash + bounded RVZ/CISO/raw stream verification + texture path/index seams + Yaz0 decoding proven byte-identical to the C oracle on real disc data; RARC archive parsing, Aurora format decoding, texture runtime, and user path open** |
 | 7 | UI + platform services | Not started |
 | 8 | Boot + integration | Not started |
 | 9 | Hosted-town multiplayer | **Candidate — clean-room frame codec + authority model + local persistence + loopback TCP transport with nonce challenge-response auth, role authorization, reconnect/idempotency, and negative security tests (458 workspace tests include 37 social-server cases); real game-client integration, NAT traversal, discovery service, multi-client runtime, and deployment remain open** |
