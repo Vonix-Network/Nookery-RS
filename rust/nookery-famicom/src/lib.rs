@@ -15,15 +15,15 @@
 //!   60-frame fade-out request, and the load-failure short circuit.
 //! * The per-frame decision of that same loop body: pump audio then run one
 //!   NES frame, or clear/present black, or return to the game scene.
+//! * A mapper-0 CPU-driven, frame-sampled PPU bus and indexed 256x240 picture.
 //! * The PC allocator plan of `famicom_emu_init` / `famicom_emu_cleanup`:
 //!   the 4 MiB host block, the 16-byte arena alignment trim, the `0xFF`
 //!   fill applied to every emulator allocation, and the ordered cleanup.
 //!
 //! # Explicit non-goals
 //!
-//! * No NES emulator. `famicom_1frame`, `ksnes_thread_exec`, the PPU/APU and
-//!   the fixNES replacement (`pc/src/pc_nes_fixnes.c`) are adapters here,
-//!   never implementations.
+//! * No mapper beyond mapper 0, APU synthesis, DMC/DMA, unofficial opcodes,
+//!   or exact mid-scanline PPU timing/NMI sequencing.
 //! * No audio, framebuffer, GX, JFWDisplay or window calls. `JW_BeginFrame`,
 //!   `famicom->disable_display = 1`, `JC_JFWDisplay_startFadeOut` and the
 //!   black EFB clear are host presentation boundaries; only their ordering
@@ -40,6 +40,7 @@ pub mod alloc;
 pub mod core;
 pub mod exit;
 pub mod input;
+pub mod ppu;
 pub mod rom;
 pub mod runtime;
 
@@ -57,6 +58,7 @@ pub use input::{
     BUTTON_DLEFT, BUTTON_DRIGHT, BUTTON_DUP, BUTTON_L, BUTTON_R, BUTTON_START, BUTTON_X, BUTTON_Y,
     BUTTON_Z, EXIT_COMBO_L_R_X_Y, EXIT_COMBO_L_R_Z, is_exit_combo,
 };
+pub use ppu::{FRAME_HEIGHT, FRAME_WIDTH, Frame, Mirroring, Ppu};
 pub use rom::{
     MAX_ROM_ID, RESOURCE_PATH_CAPACITY, ROM_NAMES, ROM_SLOT_COUNT, ResourcePath, RomId, RomIdError,
 };

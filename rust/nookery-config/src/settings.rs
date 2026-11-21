@@ -6,6 +6,8 @@
 
 use core::ops::RangeInclusive;
 
+use serde_json::Value;
+
 use crate::enums::{DiscVerificationState, InterfaceTheme, TravelMoveOutChance};
 
 /// `video.windowWidth` bounds from the registry declaration.
@@ -34,6 +36,282 @@ pub const DESKTOP_UI_SCALE_DEFAULT: i64 = 0;
 /// Runtime-dependent upstream (`ACGC_HAS_WINDOW_CONTROLS ? 0 : 75`). This crate
 /// defaults to the desktop value and only documents the mobile one.
 pub const MOBILE_UI_SCALE_DEFAULT: i64 = 75;
+
+/// The storage category of one registry entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingType {
+    /// A free-form UTF-8 string.
+    String,
+    /// A JSON boolean.
+    Boolean,
+    /// A bounded JSON integer.
+    Integer,
+    /// A string-backed enum.
+    Enum,
+    /// A structured JSON object.
+    Object,
+}
+
+/// One entry in the data-driven settings registry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SettingSpec {
+    /// Canonical config.json key.
+    pub key: &'static str,
+    /// Storage category.
+    pub value_type: SettingType,
+    /// Canonical JSON encoding of the default value.
+    pub default_json: &'static str,
+    /// Inclusive lower bound for integer values, if any.
+    pub min: Option<i64>,
+    /// Inclusive upper bound for integer values, if any.
+    pub max: Option<i64>,
+    /// UI edit step, when the PC settings UI defines one.
+    pub step: Option<i64>,
+}
+
+/// Exact registry metadata from `UserSettings` in `acgc_settings.cpp`.
+pub const SETTING_REGISTRY: &[SettingSpec] = &[
+    SettingSpec {
+        key: "backend.discPath",
+        value_type: SettingType::String,
+        default_json: "\"game.rvz\"",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "backend.discVerification",
+        value_type: SettingType::Enum,
+        default_json: "\"unknown\"",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "backend.skipPrelaunch",
+        value_type: SettingType::Boolean,
+        default_json: "false",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "backend.checkForUpdates",
+        value_type: SettingType::Boolean,
+        default_json: "true",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "video.renderer",
+        value_type: SettingType::Enum,
+        default_json: "\"auto\"",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "video.windowWidth",
+        value_type: SettingType::Integer,
+        default_json: "1280",
+        min: Some(320),
+        max: Some(16384),
+        step: Some(16),
+    },
+    SettingSpec {
+        key: "video.windowHeight",
+        value_type: SettingType::Integer,
+        default_json: "960",
+        min: Some(240),
+        max: Some(16384),
+        step: Some(16),
+    },
+    SettingSpec {
+        key: "video.windowMode",
+        value_type: SettingType::Integer,
+        default_json: "0",
+        min: Some(0),
+        max: Some(2),
+        step: None,
+    },
+    SettingSpec {
+        key: "video.uiScale",
+        value_type: SettingType::Integer,
+        default_json: "0",
+        min: Some(50),
+        max: Some(200),
+        step: None,
+    },
+    SettingSpec {
+        key: "video.theme",
+        value_type: SettingType::Enum,
+        default_json: "\"dynamic\"",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "video.vsync",
+        value_type: SettingType::Boolean,
+        default_json: "true",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "video.maxFrameRate",
+        value_type: SettingType::Integer,
+        default_json: "60",
+        min: Some(0),
+        max: Some(1000),
+        step: Some(5),
+    },
+    SettingSpec {
+        key: "video.hudAtEdges",
+        value_type: SettingType::Boolean,
+        default_json: "false",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "enhancements.preloadTextures",
+        value_type: SettingType::Integer,
+        default_json: "0",
+        min: Some(0),
+        max: Some(2),
+        step: None,
+    },
+    SettingSpec {
+        key: "gameplay.disableResetti",
+        value_type: SettingType::Boolean,
+        default_json: "false",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "gameplay.disableShopVisitorRequirement",
+        value_type: SettingType::Boolean,
+        default_json: "false",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "gameplay.borderlessAcres",
+        value_type: SettingType::Boolean,
+        default_json: "true",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "gameplay.pillarboxNes",
+        value_type: SettingType::Boolean,
+        default_json: "true",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "gameplay.fastText",
+        value_type: SettingType::Boolean,
+        default_json: "true",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "gameplay.travelMoveOutChance",
+        value_type: SettingType::Enum,
+        default_json: "\"default\"",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "audio.masterVolume",
+        value_type: SettingType::Integer,
+        default_json: "100",
+        min: Some(0),
+        max: Some(100),
+        step: Some(5),
+    },
+    SettingSpec {
+        key: "input.stickDeadzone",
+        value_type: SettingType::Integer,
+        default_json: "12",
+        min: Some(0),
+        max: Some(40),
+        step: None,
+    },
+    SettingSpec {
+        key: "input.cstickDeadzone",
+        value_type: SettingType::Integer,
+        default_json: "12",
+        min: Some(0),
+        max: Some(40),
+        step: None,
+    },
+    SettingSpec {
+        key: "input.autoAssignController",
+        value_type: SettingType::Boolean,
+        default_json: "true",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "input.singlePortMigrated",
+        value_type: SettingType::Boolean,
+        default_json: "false",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "input.allowBackgroundInput",
+        value_type: SettingType::Boolean,
+        default_json: "true",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "input.touchControls",
+        value_type: SettingType::Boolean,
+        default_json: "false",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "input.touchHaptics",
+        value_type: SettingType::Boolean,
+        default_json: "true",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "input.keyboardTyping",
+        value_type: SettingType::Boolean,
+        default_json: "false",
+        min: None,
+        max: None,
+        step: None,
+    },
+    SettingSpec {
+        key: "input.touchLayout",
+        value_type: SettingType::Object,
+        default_json: "{\"version\":1,\"controls\":{}}",
+        min: None,
+        max: None,
+        step: None,
+    },
+];
 
 /// `video.renderer` value. Upstream stores an `AuroraBackend`; the numeric form
 /// is codec-owned, so this model keeps the canonical string and leaves
@@ -104,6 +382,8 @@ pub enum SettingValue {
     Int(i64),
     Bool(bool),
     Text(String),
+    /// Structured JSON payload, used by `input.touchLayout`.
+    Json(Value),
 }
 
 impl SettingValue {
@@ -127,6 +407,14 @@ impl SettingValue {
     pub fn as_text(&self) -> Option<&str> {
         match self {
             Self::Text(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// Structured JSON payload, or `None` for another variant.
+    pub fn as_json(&self) -> Option<&Value> {
+        match self {
+            Self::Json(value) => Some(value),
             _ => None,
         }
     }
@@ -324,6 +612,8 @@ pub struct Input {
     pub touch_haptics: bool,
     /// `input.keyboardTyping`.
     pub keyboard_typing: bool,
+    /// `input.touchLayout`, encoded by upstream as a JSON object.
+    pub touch_layout: Value,
 }
 
 impl Default for Input {
@@ -337,6 +627,7 @@ impl Default for Input {
             touch_controls: false,
             touch_haptics: true,
             keyboard_typing: false,
+            touch_layout: serde_json::json!({"version": 1, "controls": {}}),
         }
     }
 }
@@ -399,6 +690,7 @@ impl Settings {
             "input.touchControls" => SettingValue::Bool(self.input.touch_controls),
             "input.touchHaptics" => SettingValue::Bool(self.input.touch_haptics),
             "input.keyboardTyping" => SettingValue::Bool(self.input.keyboard_typing),
+            "input.touchLayout" => SettingValue::Json(self.input.touch_layout.clone()),
             _ => return None,
         };
         Some(value)
@@ -512,13 +804,22 @@ impl Settings {
             "input.keyboardTyping" => {
                 self.input.keyboard_typing = decode_bool(key, &value)?;
             }
+            "input.touchLayout" => {
+                let json = value
+                    .as_json()
+                    .ok_or_else(|| SettingsError::invalid(key, "expected a JSON object"))?;
+                if !json.is_object() {
+                    return Err(SettingsError::invalid(key, "expected a JSON object"));
+                }
+                self.input.touch_layout = json.clone();
+            }
             _ => return Err(SettingsError::UnknownKey(key.to_owned())),
         }
         Ok(())
     }
 
     /// Every schema key.
-    pub const KEYS: [&'static str; 29] = [
+    pub const KEYS: [&'static str; 30] = [
         "backend.discPath",
         "backend.discVerification",
         "backend.skipPrelaunch",
@@ -548,6 +849,7 @@ impl Settings {
         "input.touchControls",
         "input.touchHaptics",
         "input.keyboardTyping",
+        "input.touchLayout",
     ];
 
     /// Reports every field that is out of range, in [`Settings::KEYS`] order.

@@ -3,11 +3,14 @@
 //! The implementation ports the highest-value PC fixNES contracts without
 //! calling the C emulator: iNES validation and mapper-0 PRG mapping, the
 //! reset-vector/6502 instruction path needed by synthetic fixtures, the
-//! controller shift register, NTSC frame timing, and the fixed 32 kHz/60
-//! audio handoff size.  Full mapper, pixel PPU, and APU waveform behavior are
-//! represented by typed gaps in [`CoreGap`].
+//! controller shift register, a frame-sampled mapper-0 PPU picture, NTSC
+//! frame timing, and the fixed 32 kHz/60 audio handoff size. Full mapper and
+//! APU waveform behavior, plus exact mid-scanline PPU timing, remain typed
+//! gaps in [`CoreGap`].
 
 use core::fmt;
+
+use crate::ppu::{Frame, Mirroring, Ppu};
 
 /// iNES header length used by `pc_fixnes_init`.
 pub const INES_HEADER_BYTES: usize = 16;
@@ -207,7 +210,7 @@ impl RomImage {
 /// Typed surfaces that remain outside this candidate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CoreGap {
-    /// The PPU advances frame timing but does not render NES pixels.
+    /// The PPU renderer is frame-sampled; exact mid-scanline timing is not ported.
     PpuRendering,
     /// The APU emits a correctly sized silent handoff, not channel waveforms.
     ApuWaveforms,
@@ -314,6 +317,8 @@ pub struct CoreFrame {
     pub cpu_cycles: u32,
     /// Audio handoff captured before the cadence reset.
     pub audio: AudioFrame,
+    /// Indexed 256x240 picture produced at the frame boundary.
+    pub picture: Frame,
 }
 
 /// One fixed-cadence stereo audio handoff.
@@ -347,17 +352,24 @@ impl AudioFrame {
 struct Bus {
     ram: [u8; CPU_RAM_BYTES],
     prg: Vec<u8>,
-    ppu_registers: [u8; 8],
+    ppu: Ppu,
     apu_registers: [u8; 0x18],
     controller: Controller,
 }
 
 impl Bus {
     fn new(rom: &RomImage) -> Self {
+        let mirroring = if rom.bytes[6] & 8 != 0 {
+            Mirroring::FourScreen
+        } else if rom.bytes[6] & 1 != 0 {
+            Mirroring::Vertical
+        } else {
+            Mirroring::Horizontal
+        };
         Self {
             ram: [0; CPU_RAM_BYTES],
             prg: rom.prg().to_vec(),
-            ppu_registers: [0; 8],
+            ppu: Ppu::new(rom.chr(), rom.has_chr_ram(), mirroring),
             apu_registers: [0; 0x18],
             controller: Controller::new(),
         }
@@ -366,7 +378,7 @@ impl Bus {
     fn read(&mut self, address: u16) -> u8 {
         match address {
             0x0000..=0x1fff => self.ram[usize::from(address) & 0x07ff],
-            0x2000..=0x3fff => self.ppu_registers[usize::from(address) & 7],
+            0x2000..=0x3fff => self.ppu.read_register(address),
             0x4015 => self.apu_registers[0x15],
             0x4016 => self.controller.read(),
             0x4017 => 0,
@@ -382,7 +394,7 @@ impl Bus {
     fn write(&mut self, address: u16, value: u8) {
         match address {
             0x0000..=0x1fff => self.ram[usize::from(address) & 0x07ff] = value,
-            0x2000..=0x3fff => self.ppu_registers[usize::from(address) & 7] = value,
+            0x2000..=0x3fff => self.ppu.write_register(address, value),
             0x4000..=0x4017 => {
                 if address == 0x4016 {
                     self.controller.write_strobe(value);
@@ -1035,7 +1047,38 @@ impl NesCore {
     /// the deterministic register bus boundary exercised by synthetic tests.
     #[must_use]
     pub fn ppu_register(&self, index: usize) -> Option<u8> {
-        self.bus.ppu_registers.get(index).copied()
+        self.bus.ppu.register(index)
+    }
+
+    /// Returns the current PPU VRAM address.
+    #[must_use]
+    pub fn ppu_vram_address(&self) -> u16 {
+        self.bus.ppu.vram_address()
+    }
+
+    /// Reads an effective palette entry for synthetic PPU fixtures.
+    #[must_use]
+    pub fn ppu_palette_entry(&self, index: usize) -> u8 {
+        self.bus.ppu.palette_entry(index)
+    }
+
+    /// Reads a mapped nametable byte for synthetic fixture inspection.
+    #[must_use]
+    pub fn ppu_nametable_entry(&self, address: u16) -> u8 {
+        self.bus.ppu.nametable_entry(address)
+    }
+
+    /// Reads OAM for synthetic sprite-fixture inspection.
+    #[must_use]
+    pub fn ppu_oam(&self) -> &[u8; 0x100] {
+        self.bus.ppu.oam()
+    }
+
+    /// Returns the most recently rendered picture, by rendering the current
+    /// surfaces without advancing the CPU. This is mainly useful for fixtures.
+    #[must_use]
+    pub fn render(&mut self) -> Frame {
+        self.bus.ppu.render()
     }
 
     /// Reads one of the CPU-visible APU register bytes.
@@ -1072,14 +1115,18 @@ impl NesCore {
         while self.ppu_dots < target {
             let cycles = u32::from(self.cpu.step(&mut self.bus)?);
             cpu_cycles += cycles;
-            self.ppu_dots = self.ppu_dots.saturating_add(cycles * 3);
+            let ppu_dots = cycles * 3;
+            self.ppu_dots = self.ppu_dots.saturating_add(ppu_dots);
+            self.bus.ppu.add_dots(ppu_dots);
         }
         self.ppu_dots %= target;
         self.frame_number += 1;
+        let picture = self.bus.ppu.render();
         Ok(CoreFrame {
             frame_number: self.frame_number,
             cpu_cycles,
             audio: AudioFrame::silent(),
+            picture,
         })
     }
 }

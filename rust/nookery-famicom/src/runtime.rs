@@ -1,14 +1,15 @@
 //! Executable, allocation-free-at-the-frame-boundary Famicom runtime shell.
 //!
 //! This module owns the runtime lifecycle and the ordering between ROM load,
-//! input, audio, emulation, presentation, and cleanup.  The CPU/PPU/APU
-//! implementation is deliberately kept behind typed state in this first
-//! candidate so an incomplete core cannot be mistaken for a host callback.
+//! input, audio, emulation, presentation, and cleanup. The CPU/PPU/APU
+//! implementation remains behind typed state so host callbacks do not own
+//! emulator internals.
 
 use crate::core::{AudioFrame, CoreError, NesCore, RomError};
 use crate::exit::{
     EmulatorExit, ExitPhase, FrameAction, HostSeam, LoadResult, PAD_COUNT, Platform, dispatch,
 };
+use crate::ppu::Frame;
 use crate::rom::{ResourcePath, RomId};
 
 /// Runtime lifecycle state.
@@ -60,6 +61,8 @@ pub struct FrameReport {
     pub audio_pumps: u64,
     /// Interleaved audio samples captured on an advance frame.
     pub audio_samples: usize,
+    /// Hash of the indexed picture on an advance frame.
+    pub frame_hash: Option<u64>,
 }
 
 /// The source-grounded runtime coordinator.
@@ -70,6 +73,7 @@ pub struct FamicomRuntime {
     rom_path: Option<ResourcePath>,
     core: Option<NesCore>,
     last_audio: Option<AudioFrame>,
+    last_frame: Option<Frame>,
     frame_number: u64,
     audio_pumps: u64,
     cleaned: bool,
@@ -92,6 +96,7 @@ impl FamicomRuntime {
             rom_path: None,
             core: None,
             last_audio: None,
+            last_frame: None,
             frame_number: 0,
             audio_pumps: 0,
             cleaned: false,
@@ -170,7 +175,10 @@ impl FamicomRuntime {
         if matches!(action, FrameAction::AdvanceFrame { .. }) {
             self.frame_number += 1;
             self.audio_pumps += runtime_host.audio_pumps;
-            self.last_audio = runtime_host.core_frame.map(|frame| frame.audio);
+            if let Some(frame) = runtime_host.core_frame {
+                self.last_audio = Some(frame.audio);
+                self.last_frame = Some(frame.picture);
+            }
         }
         self.state = if matches!(action, FrameAction::ReturnToGame) {
             RuntimeState::Exited
@@ -191,6 +199,11 @@ impl FamicomRuntime {
             } else {
                 0
             },
+            frame_hash: if matches!(action, FrameAction::AdvanceFrame { .. }) {
+                self.last_frame.as_ref().map(Frame::hash)
+            } else {
+                None
+            },
         })
     }
 
@@ -198,6 +211,12 @@ impl FamicomRuntime {
     #[must_use]
     pub fn last_audio(&self) -> Option<&AudioFrame> {
         self.last_audio.as_ref()
+    }
+
+    /// Most recent indexed 256x240 picture.
+    #[must_use]
+    pub fn last_frame(&self) -> Option<&Frame> {
+        self.last_frame.as_ref()
     }
 
     /// Performs idempotent cleanup once the runtime has exited.
@@ -209,6 +228,7 @@ impl FamicomRuntime {
         self.rom_path = None;
         self.core = None;
         self.last_audio = None;
+        self.last_frame = None;
         self.cleaned = true;
         self.state = RuntimeState::Cleaned;
         Ok(())
