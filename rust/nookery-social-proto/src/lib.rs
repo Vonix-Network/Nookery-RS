@@ -31,6 +31,12 @@ pub enum MessageType {
     Command = 4,
     Snapshot = 5,
     Error = 6,
+    /// Server-to-client challenge containing a connection nonce.
+    AuthChallenge = 7,
+    /// Client-to-server proof of possession of the configured secret.
+    AuthResponse = 8,
+    /// Server-to-client authentication result.
+    AuthResult = 9,
 }
 
 impl MessageType {
@@ -42,6 +48,9 @@ impl MessageType {
             4 => Ok(Self::Command),
             5 => Ok(Self::Snapshot),
             6 => Ok(Self::Error),
+            7 => Ok(Self::AuthChallenge),
+            8 => Ok(Self::AuthResponse),
+            9 => Ok(Self::AuthResult),
             _ => Err(DecodeError::UnknownMessageType(value)),
         }
     }

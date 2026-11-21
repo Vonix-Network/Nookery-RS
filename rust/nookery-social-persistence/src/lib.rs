@@ -81,6 +81,43 @@ impl Store {
         Self::open(self.root.join(name))
     }
 
+    /// Lists town directories containing only the bounded sixteen-byte hex
+    /// identifiers accepted by [`Self::for_town`]. Non-town entries are
+    /// ignored so unrelated files cannot become hosted state.
+    pub fn town_ids(&self) -> Result<Vec<[u8; 16]>, PersistenceError> {
+        let mut towns = Vec::new();
+        for entry in fs::read_dir(&self.root)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                continue;
+            }
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.len() != 32 || !name.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                continue;
+            }
+            let mut id = [0u8; 16];
+            let bytes = name.as_bytes();
+            let mut valid = true;
+            for index in 0..16 {
+                let Some(high) = hex_value(bytes[index * 2]) else {
+                    valid = false;
+                    break;
+                };
+                let Some(low) = hex_value(bytes[index * 2 + 1]) else {
+                    valid = false;
+                    break;
+                };
+                id[index] = (high << 4) | low;
+            }
+            if valid {
+                towns.push(id);
+            }
+        }
+        towns.sort_unstable();
+        Ok(towns)
+    }
+
     pub fn write_snapshot(&self, snapshot: &Snapshot) -> Result<(), PersistenceError> {
         validate_snapshot(snapshot)?;
         let encoded = encode_snapshot(snapshot);
@@ -133,7 +170,15 @@ impl Store {
     /// Returns the last valid checkpoint and command prefix after a torn final append.
     /// Checksummed corruption in a complete record is still refused.
     pub fn recover(&self) -> Result<(Option<Snapshot>, Vec<CommandRecord>), PersistenceError> {
-        let snapshot = self.read_snapshot()?;
+        let snapshot = match self.read_snapshot() {
+            Ok(snapshot) => snapshot,
+            // A torn snapshot has no trustworthy bytes, but the command log
+            // can still provide a complete recovery path. Checksummed
+            // corruption remains a hard refusal.
+            Err(PersistenceError::Corrupt("truncated header"))
+            | Err(PersistenceError::Corrupt("truncated record")) => None,
+            Err(error) => return Err(error),
+        };
         let commands = match read_optional(&self.log_path(), MAX_LOG_BYTES)? {
             Some(bytes) => decode_commands(&bytes, true)?,
             None => Vec::new(),
@@ -147,6 +192,15 @@ impl Store {
 
     fn log_path(&self) -> PathBuf {
         self.root.join("commands.log")
+    }
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
     }
 }
 

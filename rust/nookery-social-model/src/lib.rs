@@ -115,6 +115,13 @@ impl Presence {
         Self { x, y, facing }
     }
 
+    /// Constructs a decoded persisted presence after the persistence layer
+    /// has validated its bounded values.
+    #[must_use]
+    pub const fn from_parts(x: i16, y: i16, facing: u8) -> Self {
+        Self { x, y, facing }
+    }
+
     #[must_use]
     pub const fn x(self) -> i16 {
         self.x
@@ -141,6 +148,17 @@ pub struct DroppedItem {
 }
 
 impl DroppedItem {
+    /// Constructs a persisted public item after the persistence layer has
+    /// validated its bounded fields.
+    #[must_use]
+    pub const fn from_parts(item_id: u32, x: i16, y: i16, owner: ActorId) -> Self {
+        Self {
+            item_id,
+            x,
+            y,
+            owner,
+        }
+    }
     #[must_use]
     pub const fn item_id(self) -> u32 {
         self.item_id
@@ -172,6 +190,21 @@ pub struct SessionSnapshot {
 }
 
 impl SessionSnapshot {
+    /// Constructs a persisted session view after bounded decoding.
+    #[must_use]
+    pub const fn from_parts(
+        session_id: SessionId,
+        actor: ActorId,
+        role: Role,
+        presence: Option<Presence>,
+    ) -> Self {
+        Self {
+            session_id,
+            actor,
+            role,
+            presence,
+        }
+    }
     #[must_use]
     pub const fn session_id(self) -> SessionId {
         self.session_id
@@ -204,6 +237,23 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    /// Constructs a snapshot from a trusted persistence decoder.
+    #[must_use]
+    pub fn from_parts(
+        town_id: TownId,
+        revision: u64,
+        closed: bool,
+        sessions: Vec<SessionSnapshot>,
+        items: Vec<DroppedItem>,
+    ) -> Self {
+        Self {
+            town_id,
+            revision,
+            closed,
+            sessions,
+            items,
+        }
+    }
     #[must_use]
     pub const fn town_id(&self) -> TownId {
         self.town_id
@@ -353,6 +403,33 @@ impl Town {
                 presence: None,
             }],
             items: Vec::new(),
+            request_history: Vec::new(),
+        }
+    }
+
+    /// Rehydrates a town from the deterministic public snapshot representation.
+    ///
+    /// The snapshot is produced by this crate or by a trusted persistence
+    /// decoder. Request history is intentionally empty after recovery; the
+    /// transport/server layer rebuilds any durable command replay state it
+    /// needs from its bounded command log.
+    #[must_use]
+    pub fn from_snapshot(snapshot: Snapshot) -> Self {
+        Self {
+            town_id: snapshot.town_id,
+            revision: snapshot.revision,
+            closed: snapshot.closed,
+            sessions: snapshot
+                .sessions
+                .into_iter()
+                .map(|session| Session {
+                    id: session.session_id,
+                    actor: session.actor,
+                    role: session.role,
+                    presence: session.presence,
+                })
+                .collect(),
+            items: snapshot.items,
             request_history: Vec::new(),
         }
     }
