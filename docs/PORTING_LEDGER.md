@@ -155,7 +155,7 @@ An optimization is accepted only with a row here showing the metric, the before/
 |---|---|---|
 | 0 | Baseline pin + crate tests | **Partial — host CMake gate blocked** |
 | 1 | Data-folder C ABI + parity harness | **Candidate — ABI + Rust/C harness pass; C++ parity and CMake linkage unproven** |
-| 2 | Save/GCI + byteswap | **Candidate — GCI validator + primitive bswap only; typed `Save_t`/ARAM/card I/O parity not started** |
+| 2 | Save/GCI + byteswap | **Candidate — GCI validator + primitive bswap + typed leaf/Mail slices; composite `Save_t`/quest/ARAM/card I/O parity not started** |
 | 3 | Settings + input | **Candidate — settings model + bounded input profile/legacy slice; live SDL/PADStatus/controller integration not started** |
 | 4 | Allocator / arenas | **Candidate — bounded model + fixed-seed C parity; runtime ABI and workload gates not started** |
 | 5 | Famicom boundary | **Candidate — host seam only; emulator/fixNES not started** |
