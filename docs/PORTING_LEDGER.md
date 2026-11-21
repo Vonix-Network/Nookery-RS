@@ -90,7 +90,7 @@ Third-party emulator; integrate, do not rewrite.
 |---|---|
 | **Target** | `rust/nookery-famicom` host seam first; `pc/src/pc_nes_fixnes.c`, `src/famicom_emu.c`, `src/static/Famicom/` remain the oracle |
 | **Slices** | (a) frame-buffer contract (256×240 RGB565); (b) AI DMA audio cadence; (c) save-header (`0x40`) and internal-ROM table |
-| **Gate — current candidate** | ROM catalog, exact exit combos/countdown, frame-action ordering, and PC arena/cleanup contract pass bounded tests; no emulator or fixNES implementation is included. |
+| **Gate — current candidate** | ROM catalog, exact exit combos/countdown, frame-action ordering, PC arena/cleanup contract, mapper-0 iNES validation, deterministic synthetic 6502 execution, controller shift behavior, audio cadence, and runtime cleanup pass 60 Famicom tests; full emulator/fixNES parity and application activation remain open. |
 | **Gate — visual** | A known NES ROM renders an identical frame hash (per-frame CRC over the RGB565 buffer) as the C path for a fixed input script |
 | **Gate — audio** | Sample sequence bit-identical for the same script; no underruns introduced |
 | **Constraint** | fixNES is MIT (FIX94) — keep `pc/lib/fixnes/LICENSE` and attribution; do not vendor a different emulator |
@@ -158,7 +158,7 @@ An optimization is accepted only with a row here showing the metric, the before/
 | 2 | Save/GCI + byteswap | **Candidate — GCI validator + primitive bswap + typed leaf/Mail slices; composite `Save_t`/quest/ARAM/card I/O parity not started** |
 | 3 | Settings + input | **Candidate — settings model + bounded input profile/legacy slice; live SDL/PADStatus/controller integration not started** |
 | 4 | Allocator / arenas | **Candidate — bounded model + fixed-seed C parity; runtime ABI and workload gates not started** |
-| 5 | Famicom boundary | **Candidate — host seam only; emulator/fixNES not started** |
+| 5 | Famicom boundary | **Candidate — host seam plus bounded native mapper-0/synthetic-6502 runtime; full emulator/fixNES, visual/audio parity, and application activation remain open** |
 | 6 | Disc + content | **Candidate — catalog/header/hash + texture path seams; Aurora format decoding, texture runtime, indexing, and user path not started** |
 | 7 | UI + platform services | Not started |
 | 8 | Boot + integration | Not started |
