@@ -68,6 +68,20 @@ impl TextureIndex {
         &self.registrations
     }
 
+    /// Finds a registration using the same normalized key used while indexing.
+    ///
+    /// Lookup is case-insensitive and accepts either slash spelling, while
+    /// still rejecting absolute and parent-traversal keys. This keeps the
+    /// eventual decoder/registrar hook from having to duplicate path policy.
+    #[must_use]
+    pub fn lookup(&self, key: &str) -> Option<&TextureRegistration> {
+        let normalized = normalized_lookup_key(key)?;
+        self.registrations
+            .binary_search_by(|registration| registration.key.as_str().cmp(&normalized))
+            .ok()
+            .map(|index| &self.registrations[index])
+    }
+
     /// Counts for registered, duplicate, missing, invalid, symlink, and
     /// unsupported entries.
     #[must_use]
@@ -231,7 +245,20 @@ fn path_sort_key(path: &Path) -> (String, String) {
 
 fn normalized_key(path: &Path) -> Option<String> {
     let value = path.to_str()?.replace('\\', "/");
-    if value.is_empty() || value.starts_with('/') || value.split('/').any(|part| part == "..") {
+    normalized_lookup_key(&value)
+}
+
+fn normalized_lookup_key(value: &str) -> Option<String> {
+    let value = value.replace('\\', "/");
+    let windows_drive_absolute = value.len() >= 3
+        && value.as_bytes()[0].is_ascii_alphabetic()
+        && value.as_bytes()[1] == b':'
+        && value.as_bytes()[2] == b'/';
+    if value.is_empty()
+        || value.starts_with('/')
+        || windows_drive_absolute
+        || value.split('/').any(|part| part == "..")
+    {
         return None;
     }
     Some(value.to_ascii_lowercase())
@@ -350,6 +377,44 @@ mod tests {
             index.registrations()[0].path.file_name().unwrap(),
             "TEX.PNG"
         );
+    }
+
+    #[test]
+    fn lookup_reuses_normalization_and_rejects_traversal() {
+        let root = TempDir::new("lookup");
+        fs::create_dir(root.path().join("UI")).expect("create UI directory");
+        fs::write(root.path().join("UI").join("Icon.PNG"), png()).expect("write texture fixture");
+        let index = index_texture_pack(root.path()).expect("index texture pack");
+
+        assert_eq!(
+            index.lookup("ui\\icon.png").map(|entry| entry.key.as_str()),
+            Some("ui/icon.png")
+        );
+        assert!(index.lookup("../ui/icon.png").is_none());
+        assert!(index.lookup(r"..\ui\icon.png").is_none());
+        assert!(index.lookup(r"ui/..\icon.png").is_none());
+        assert!(index.lookup("/ui/icon.png").is_none());
+        assert!(index.lookup(r"C:\ui\icon.png").is_none());
+        assert!(index.lookup(r"\\server\share\ui\icon.png").is_none());
+        assert_eq!(
+            normalized_lookup_key(r"UI\ICON.PNG"),
+            Some("ui/icon.png".to_owned())
+        );
+        assert!(normalized_lookup_key(r"..\ui\icon.png").is_none());
+        assert!(normalized_lookup_key(r"ui/..\icon.png").is_none());
+    }
+
+    #[test]
+    fn repeated_indexing_is_byte_for_byte_deterministic() {
+        let root = TempDir::new("repeat");
+        fs::create_dir(root.path().join("nested")).expect("create nested directory");
+        fs::write(root.path().join("z.png"), png()).expect("write z fixture");
+        fs::write(root.path().join("nested").join("A.PNG"), png()).expect("write A fixture");
+        fs::write(root.path().join("bad.dds"), [0u8; 128]).expect("write malformed DDS");
+
+        let first = index_texture_pack(root.path()).expect("first index");
+        let second = index_texture_pack(root.path()).expect("second index");
+        assert_eq!(first, second);
     }
 
     #[test]

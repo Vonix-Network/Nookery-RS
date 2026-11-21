@@ -1,4 +1,4 @@
-//! The disc-image seam.
+//! The disc-image and host-stream seams.
 //!
 //! Upstream, `borealis::disc` obtains bytes from an `SDL_IOStream` wrapped in
 //! `DiscStream`, and `nod` reconstructs the *logical* image (decompressing RVZ /
@@ -47,6 +47,131 @@ pub trait DiscImage {
     /// `0` means end of image.  The slice bound replaces nod's "oversized read"
     /// guard structurally.
     fn read_at(&mut self, offset: u64, buf: &mut [u8]) -> Result<usize, ImageError>;
+}
+
+/// Failure from the seekable host stream adapter.
+#[derive(Debug)]
+pub enum StreamError {
+    /// The operation was attempted after [`DiscStream::close`].
+    Closed,
+    /// The host stream returned an I/O error.
+    Io(std::io::Error),
+    /// The host stream reported a position that cannot be represented.
+    PositionOverflow,
+}
+
+impl std::fmt::Display for StreamError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Closed => formatter.write_str("disc stream is closed"),
+            Self::Io(error) => write!(formatter, "disc stream I/O failed: {error}"),
+            Self::PositionOverflow => formatter.write_str("disc stream position overflows u64"),
+        }
+    }
+}
+
+impl std::error::Error for StreamError {}
+
+/// An owned, seekable stream adapter matching Borealis' `DiscStream` callback
+/// contract (`read_at`, `stream_len`, and `close`).
+///
+/// Opening measures the source once and rewinds it to offset zero. Reads use
+/// the same absolute-offset semantics as `stream_read_at`: they seek before
+/// reading and return a short count at EOF. `close` is explicit and idempotent;
+/// dropping an open adapter closes its owned reader as well.
+pub struct DiscStream<R> {
+    reader: Option<R>,
+    length: u64,
+    position: u64,
+}
+
+impl<R: std::io::Read + std::io::Seek> DiscStream<R> {
+    /// Opens a seekable reader and records its byte length.
+    pub fn open(mut reader: R) -> Result<Self, StreamError> {
+        let end = reader
+            .seek(std::io::SeekFrom::End(0))
+            .map_err(StreamError::Io)?;
+        reader
+            .seek(std::io::SeekFrom::Start(0))
+            .map_err(StreamError::Io)?;
+        Ok(Self {
+            reader: Some(reader),
+            length: end,
+            position: 0,
+        })
+    }
+
+    /// Returns the source length recorded at open time.
+    pub const fn len(&self) -> u64 {
+        self.length
+    }
+
+    /// Whether the source length recorded at open time is zero.
+    pub const fn is_empty(&self) -> bool {
+        self.length == 0
+    }
+
+    /// Whether the adapter has been explicitly closed.
+    pub const fn is_closed(&self) -> bool {
+        self.reader.is_none()
+    }
+
+    /// Returns the current host-stream cursor.
+    pub const fn tell(&self) -> u64 {
+        self.position
+    }
+
+    /// Reads from the current cursor, returning a short count at EOF.
+    pub fn read(&mut self, output: &mut [u8]) -> Result<usize, StreamError> {
+        let reader = self.reader.as_mut().ok_or(StreamError::Closed)?;
+        let read = reader.read(output).map_err(StreamError::Io)?;
+        self.position = self
+            .position
+            .checked_add(read as u64)
+            .ok_or(StreamError::PositionOverflow)?;
+        Ok(read)
+    }
+
+    /// Reads from an absolute offset, preserving the callback's seek-before-
+    /// read behavior and updating the current cursor.
+    pub fn read_at(&mut self, offset: u64, output: &mut [u8]) -> Result<usize, StreamError> {
+        self.seek(std::io::SeekFrom::Start(offset))?;
+        self.read(output)
+    }
+
+    /// Moves the current cursor using standard `Read + Seek` semantics.
+    pub fn seek(&mut self, from: std::io::SeekFrom) -> Result<u64, StreamError> {
+        let reader = self.reader.as_mut().ok_or(StreamError::Closed)?;
+        let position = reader.seek(from).map_err(StreamError::Io)?;
+        self.position = position;
+        Ok(position)
+    }
+
+    /// Closes the adapter. Repeated closes are successful and do not touch the
+    /// underlying reader again.
+    pub fn close(&mut self) -> Result<(), StreamError> {
+        self.reader.take();
+        Ok(())
+    }
+}
+
+impl<R> Drop for DiscStream<R> {
+    fn drop(&mut self) {
+        self.reader.take();
+    }
+}
+
+impl<R: std::io::Read + std::io::Seek> DiscImage for DiscStream<R> {
+    fn logical_size(&self) -> u64 {
+        self.length
+    }
+
+    fn read_at(&mut self, offset: u64, buffer: &mut [u8]) -> Result<usize, ImageError> {
+        self.read_at(offset, buffer).map_err(|error| match error {
+            StreamError::Closed => ImageError::Failed,
+            StreamError::Io(_) | StreamError::PositionOverflow => ImageError::Io,
+        })
+    }
 }
 
 /// A caller-supplied byte buffer treated as the reconstructed image.

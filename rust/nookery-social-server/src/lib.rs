@@ -234,8 +234,19 @@ impl TownServer {
             let store = self.root_store.for_town(town_bytes)?;
             let (stored_snapshot, commands) = store.recover()?;
             let (town, path) = if let Some(snapshot) = stored_snapshot {
+                let stored_revision = snapshot.revision;
                 let snapshot = decode_model_snapshot(&snapshot.bytes)
                     .map_err(|_| ServerError::InvalidConfig("invalid town snapshot"))?;
+                if snapshot.revision() != stored_revision {
+                    return Err(ServerError::InvalidConfig(
+                        "town snapshot revision mismatch",
+                    ));
+                }
+                if snapshot.town_id().bytes() != town_bytes {
+                    return Err(ServerError::InvalidConfig(
+                        "town snapshot identity mismatch",
+                    ));
+                }
                 (model::Town::from_snapshot(snapshot), RecoveryPath::Snapshot)
             } else {
                 (
@@ -507,6 +518,13 @@ impl TownServer {
             .find(|active| active.role() == model::Role::Owner)
             .ok_or(ErrorCode::NotFound)?
             .session_id();
+        // Recovery keeps the model's owner membership, but admission still
+        // requires the corresponding live server lease. An expired owner must
+        // never authorize a new visitor from persisted state alone.
+        let owner_lease = self.sessions.get(&owner).ok_or(ErrorCode::NotFound)?;
+        if owner_lease.role != ServerRole::Owner || owner_lease.town != Some(town_id) {
+            return Err(ErrorCode::NotFound);
+        }
         let mut candidate = hosted.model.clone();
         let snapshot = candidate
             .admit_visitor(owner, session, target_actor)
@@ -684,12 +702,18 @@ impl TownServer {
                 if let Some(hosted) = self.towns.get(&town_id) {
                     let mut candidate = hosted.model.clone();
                     if let Ok(snapshot) = candidate.leave(session) {
-                        let _ = hosted.store.write_snapshot(&StoredSnapshot {
-                            revision: snapshot.revision(),
-                            bytes: encode_model_snapshot(&snapshot),
-                        });
-                        if let Some(current) = self.towns.get_mut(&town_id) {
-                            current.model = candidate;
+                        if persist_state(
+                            &hosted.store,
+                            snapshot.revision(),
+                            &snapshot,
+                            model::RequestId::new(session.get()),
+                            membership_bytes(3, session, lease.actor, town_id),
+                        )
+                        .is_ok()
+                        {
+                            if let Some(current) = self.towns.get_mut(&town_id) {
+                                current.model = candidate;
+                            }
                         }
                     }
                 }
@@ -910,23 +934,60 @@ fn decode_model_snapshot(bytes: &[u8]) -> Result<model::Snapshot, ()> {
         return Err(());
     }
     let mut sessions = Vec::with_capacity(session_count);
+    let mut owner_count = 0usize;
+    let mut visitor_count = 0usize;
+    let mut moderator_count = 0usize;
     for _ in 0..session_count {
         let session_id = model::SessionId::new(cursor.u64()?);
         let actor = model::ActorId::new(cursor.u64()?);
+        if session_id.get() == 0 || actor.get() == 0 {
+            return Err(());
+        }
         let role = match cursor.byte()? {
-            1 => model::Role::Owner,
-            2 => model::Role::Visitor,
-            3 => model::Role::Moderator,
+            1 => {
+                owner_count += 1;
+                model::Role::Owner
+            }
+            2 => {
+                visitor_count += 1;
+                model::Role::Visitor
+            }
+            3 => {
+                moderator_count += 1;
+                model::Role::Moderator
+            }
             _ => return Err(()),
         };
         let presence = match cursor.byte()? {
             0 => None,
-            1 => Some(model_presence(cursor.i16()?, cursor.i16()?, cursor.byte()?)),
+            1 => {
+                let x = cursor.i16()?;
+                let y = cursor.i16()?;
+                let facing = cursor.byte()?;
+                if !(model::MIN_COORDINATE..=model::MAX_COORDINATE).contains(&x)
+                    || !(model::MIN_COORDINATE..=model::MAX_COORDINATE).contains(&y)
+                    || facing >= model::FACING_VALUES
+                {
+                    return Err(());
+                }
+                Some(model_presence(x, y, facing))
+            }
             _ => return Err(()),
         };
+        if sessions.iter().any(|active: &model::SessionSnapshot| {
+            active.session_id() == session_id || active.actor() == actor
+        }) {
+            return Err(());
+        }
         sessions.push(model::SessionSnapshot::from_parts(
             session_id, actor, role, presence,
         ));
+    }
+    if owner_count != 1
+        || visitor_count > model::MAX_VISITORS
+        || moderator_count > model::MAX_MODERATORS
+    {
+        return Err(());
     }
     let item_count = usize::from(cursor.u16()?);
     if item_count > model::MAX_ITEMS {
@@ -934,12 +995,19 @@ fn decode_model_snapshot(bytes: &[u8]) -> Result<model::Snapshot, ()> {
     }
     let mut items = Vec::with_capacity(item_count);
     for _ in 0..item_count {
-        items.push(model::DroppedItem::from_parts(
-            cursor.u32()?,
-            cursor.i16()?,
-            cursor.i16()?,
-            model::ActorId::new(cursor.u64()?),
-        ));
+        let item_id = cursor.u32()?;
+        let x = cursor.i16()?;
+        let y = cursor.i16()?;
+        let owner = model::ActorId::new(cursor.u64()?);
+        if !(model::MIN_COORDINATE..=model::MAX_COORDINATE).contains(&x)
+            || !(model::MIN_COORDINATE..=model::MAX_COORDINATE).contains(&y)
+            || items
+                .iter()
+                .any(|item: &model::DroppedItem| item.item_id() == item_id)
+        {
+            return Err(());
+        }
+        items.push(model::DroppedItem::from_parts(item_id, x, y, owner));
     }
     if !cursor.is_empty() {
         return Err(());
@@ -1790,6 +1858,9 @@ fn read_wire_frame_with_budget(
             }));
         }
         let frames = decoder.push(&buffer[..count]).map_err(NetError::Frame)?;
+        if frames.len() > 1 {
+            return Err(NetError::Protocol("multiple frames in one read"));
+        }
         if let Some(frame) = frames.into_iter().next() {
             return Ok(frame);
         }
@@ -2101,6 +2172,40 @@ mod tests {
     }
 
     #[test]
+    fn expired_owner_lease_cannot_admit_joiner_from_persisted_membership() {
+        let (mut server, root) = server(Duration::from_millis(5));
+        let owner = model::SessionId::new(20);
+        let guest = model::SessionId::new(21);
+        let town = TownKey::new([0x44; 16]);
+        server.connect(owner, model::ActorId::new(1)).unwrap();
+        server
+            .execute(
+                owner,
+                model::RequestId::new(1),
+                0,
+                Command::CreateTown { town_id: town },
+            )
+            .unwrap();
+        server.connect(guest, model::ActorId::new(2)).unwrap();
+        std::thread::sleep(Duration::from_millis(20));
+
+        // Reconnecting only the guest expires the owner lease and leaves the
+        // persisted owner membership in the hosted model.
+        server.reconnect(guest, model::ActorId::new(2)).unwrap();
+        assert_eq!(server.session_role(owner), Err(ErrorCode::Expired));
+        assert_eq!(
+            server.execute(
+                guest,
+                model::RequestId::new(2),
+                0,
+                Command::Join { town_id: town },
+            ),
+            Err(ErrorCode::NotFound)
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn frame_codec_rejects_hostile_packets_and_duplicate_model_delivery_is_idempotent() {
         let (mut server, root) = server(Duration::from_secs(60));
         let owner = model::SessionId::new(10);
@@ -2147,6 +2252,154 @@ mod tests {
     }
 
     #[test]
+    fn in_memory_multi_client_vertical_covers_authority_conflict_replay_and_recovery() {
+        let (mut server, root) = server(Duration::from_secs(60));
+        let owner = model::SessionId::new(10);
+        let visitor = model::SessionId::new(11);
+        let town = TownKey::new([0x2a; 16]);
+        server.connect(owner, model::ActorId::new(1)).unwrap();
+        server.connect(visitor, model::ActorId::new(2)).unwrap();
+
+        assert_eq!(
+            server.execute(
+                owner,
+                model::RequestId::new(1),
+                0,
+                Command::CreateTown { town_id: town },
+            ),
+            Ok(Response::Accepted { revision: 0 })
+        );
+        assert_eq!(
+            server.discover(visitor),
+            Ok(Response::Discovered(vec![town]))
+        );
+        assert_eq!(
+            server.execute(
+                visitor,
+                model::RequestId::new(2),
+                0,
+                Command::Join { town_id: town },
+            ),
+            Ok(Response::Accepted { revision: 1 })
+        );
+        assert_eq!(server.session_role(visitor), Ok(ServerRole::Visitor));
+
+        let presence = Command::Apply {
+            town_id: town,
+            command: model::Command::SetPresence {
+                x: 7,
+                y: -3,
+                facing: 4,
+            },
+        };
+        assert_eq!(
+            server.execute(visitor, model::RequestId::new(3), 1, presence),
+            Ok(Response::Accepted { revision: 2 })
+        );
+        assert_eq!(
+            server.execute(visitor, model::RequestId::new(3), 1, presence),
+            Ok(Response::Accepted { revision: 2 })
+        );
+        assert_eq!(
+            server.execute(
+                visitor,
+                model::RequestId::new(3),
+                1,
+                Command::Apply {
+                    town_id: town,
+                    command: model::Command::SetPresence {
+                        x: 8,
+                        y: -3,
+                        facing: 4,
+                    },
+                },
+            ),
+            Err(ErrorCode::Conflict)
+        );
+        assert_eq!(
+            server.execute(
+                visitor,
+                model::RequestId::new(4),
+                1,
+                Command::Apply {
+                    town_id: town,
+                    command: model::Command::SetPresence {
+                        x: 8,
+                        y: -3,
+                        facing: 4,
+                    },
+                },
+            ),
+            Err(ErrorCode::StaleRevision)
+        );
+        assert_eq!(
+            server.execute(
+                visitor,
+                model::RequestId::new(5),
+                2,
+                Command::Apply {
+                    town_id: town,
+                    command: model::Command::CloseTown,
+                },
+            ),
+            Err(ErrorCode::Unauthorized)
+        );
+        assert_eq!(
+            server.execute(
+                visitor,
+                model::RequestId::new(6),
+                2,
+                Command::Leave { town_id: town },
+            ),
+            Ok(Response::Accepted { revision: 3 })
+        );
+        assert_eq!(server.session_role(visitor), Ok(ServerRole::Resident));
+
+        drop(server);
+        let mut recovered =
+            TownServer::open(Store::open(&root).unwrap(), Duration::from_secs(60)).unwrap();
+        assert_eq!(
+            recovered.recovery_paths().get(&town),
+            Some(&RecoveryPath::Snapshot)
+        );
+        assert_eq!(recovered.state_bytes(town).unwrap(), {
+            let mut expected = model::Town::new(
+                model::TownId::new(town.bytes()),
+                model::ActorId::new(1),
+                owner,
+            );
+            expected
+                .admit_visitor(owner, visitor, model::ActorId::new(2))
+                .unwrap();
+            expected
+                .apply(
+                    visitor,
+                    1,
+                    model::RequestId::new(3),
+                    model::Command::SetPresence {
+                        x: 7,
+                        y: -3,
+                        facing: 4,
+                    },
+                )
+                .unwrap();
+            expected.leave(visitor).unwrap();
+            encode_model_snapshot(&expected.snapshot())
+        });
+        recovered.connect(visitor, model::ActorId::new(2)).unwrap();
+        assert_eq!(
+            recovered.execute(
+                visitor,
+                model::RequestId::new(7),
+                3,
+                Command::Join { town_id: town },
+            ),
+            Ok(Response::Accepted { revision: 4 })
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn accepted_response_payload_round_trips_without_duplicate_revision() {
         let (server, root) = server(Duration::from_secs(60));
         let revision = 0x0102_0304_0506_0708;
@@ -2176,7 +2429,7 @@ mod tests {
 
     #[test]
     fn reconnect_refreshes_lease_and_expiry_revokes_visitor() {
-        let (mut server, root) = server(Duration::from_millis(5));
+        let (mut server, root) = server(Duration::from_secs(1));
         let owner = model::SessionId::new(10);
         let guest = model::SessionId::new(11);
         let town = TownKey::new([9; 16]);
@@ -2199,7 +2452,7 @@ mod tests {
             )
             .unwrap();
         server.reconnect(guest, model::ActorId::new(2)).unwrap();
-        std::thread::sleep(Duration::from_millis(10));
+        std::thread::sleep(Duration::from_millis(1100));
         assert_eq!(server.session_role(guest), Err(ErrorCode::Expired));
         let _ = fs::remove_dir_all(root);
     }
@@ -2751,6 +3004,64 @@ mod tests {
             Some(&RecoveryPath::CommandLog)
         );
         let mut recovered = recovered;
+        assert_eq!(recovered.state_bytes(town).unwrap(), expected);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn expired_visitor_removal_is_replayed_after_snapshot_torn() {
+        let (mut town_server, root) = server(Duration::from_millis(100));
+        let owner = model::SessionId::new(10);
+        let visitor = model::SessionId::new(11);
+        let town = TownKey::new([0x55; 16]);
+        town_server.connect(owner, model::ActorId::new(1)).unwrap();
+        town_server
+            .execute(
+                owner,
+                model::RequestId::new(1),
+                0,
+                Command::CreateTown { town_id: town },
+            )
+            .unwrap();
+        town_server
+            .connect(visitor, model::ActorId::new(2))
+            .unwrap();
+        town_server
+            .execute(
+                visitor,
+                model::RequestId::new(2),
+                0,
+                Command::Join { town_id: town },
+            )
+            .unwrap();
+
+        std::thread::sleep(Duration::from_millis(120));
+        town_server
+            .reconnect(owner, model::ActorId::new(1))
+            .unwrap();
+        let expected = {
+            let mut expected = model::Town::new(
+                model::TownId::new(town.bytes()),
+                model::ActorId::new(1),
+                owner,
+            );
+            expected
+                .admit_visitor(owner, visitor, model::ActorId::new(2))
+                .unwrap();
+            expected.leave(visitor).unwrap();
+            encode_model_snapshot(&expected.snapshot())
+        };
+        assert_eq!(town_server.state_bytes(town).unwrap(), expected);
+
+        let snapshot_path = root.join("55555555555555555555555555555555/snapshot.bin");
+        fs::write(snapshot_path, [0u8; 1]).unwrap();
+        drop(town_server);
+        let mut recovered =
+            TownServer::open(Store::open(&root).unwrap(), Duration::from_secs(60)).unwrap();
+        assert_eq!(
+            recovered.recovery_paths().get(&town),
+            Some(&RecoveryPath::CommandLog)
+        );
         assert_eq!(recovered.state_bytes(town).unwrap(), expected);
         let _ = fs::remove_dir_all(root);
     }

@@ -759,4 +759,24 @@ DPad_Up=dpup
                 .is_empty()
         );
     }
+
+    #[test]
+    fn apply_controller_is_idempotent_for_late_reconnects() {
+        let legacy = prepare_from_ini("Pad_A=a\nPad_L=lefttrigger\n", Precedence::default());
+        let mut profiles = crate::memory::MemoryProfiles::new();
+        assert!(apply_controller(&legacy, &mut profiles, 7));
+        assert!(!apply_controller(&legacy, &mut profiles, 7));
+        assert_eq!(
+            profiles
+                .bindings_for_control(ProfileTarget::controller(7), ControlId::A)
+                .len(),
+            1
+        );
+        assert_eq!(
+            profiles
+                .bindings_for_control(ProfileTarget::controller(7), ControlId::TriggerL)
+                .len(),
+            1
+        );
+    }
 }

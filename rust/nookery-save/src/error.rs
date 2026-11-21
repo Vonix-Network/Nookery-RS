@@ -57,6 +57,11 @@ pub enum GciError {
     },
     /// Neither the main save block nor its embedded backup validates.
     NoValidSaveCopy,
+    /// A composite caller requested a save-copy index other than 0 or 1.
+    InvalidSaveCopy {
+        /// Index supplied by the caller.
+        found: usize,
+    },
     /// No auxiliary block layout passed checksum validation.
     BadAuxChecksums,
     /// A caller-supplied path suffix would redirect the derived path.
@@ -110,6 +115,9 @@ impl fmt::Display for GciError {
             }
             GciError::NoValidSaveCopy => {
                 f.write_str("neither main save block nor embedded backup validates")
+            }
+            GciError::InvalidSaveCopy { found } => {
+                write!(f, "save copy index {found} is outside main/backup")
             }
             GciError::BadAuxChecksums => f.write_str("auxiliary block checksums are invalid"),
             GciError::InvalidSuffix => f.write_str("path suffix is not a plain suffix"),

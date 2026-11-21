@@ -841,10 +841,10 @@ fn evaluate_bindings(bindings: &[Binding], sample: ControllerSample) -> PadStatu
         | digital_mask(&digital, ControlId::Left, PAD_BUTTON_LEFT)
         | digital_mask(&digital, ControlId::Right, PAD_BUTTON_RIGHT);
 
-    let stick_x = scaled_axis(values, ControlId::LeftX, 72, 40, 0);
-    let stick_y = scaled_axis(values, ControlId::LeftY, 72, 40, 0);
-    let substick_x = scaled_axis(values, ControlId::RightX, 59, 31, 0);
-    let substick_y = scaled_axis(values, ControlId::RightY, 59, 31, 0);
+    let (stick_x, stick_y) =
+        scaled_axis_pair(values, ControlId::LeftX, ControlId::LeftY, 72, 40, 0);
+    let (substick_x, substick_y) =
+        scaled_axis_pair(values, ControlId::RightX, ControlId::RightY, 59, 31, 0);
     PadStatus {
         button,
         stick_x,
@@ -860,7 +860,19 @@ fn evaluate_bindings(bindings: &[Binding], sample: ControllerSample) -> PadStatu
 }
 
 fn binding_value(binding: &Binding, sample: ControllerSample) -> f32 {
-    let raw = match binding.input.control {
+    if binding
+        .held
+        .iter()
+        .any(|held| input_value(held.input.control, sample) < held.threshold)
+    {
+        return 0.0;
+    }
+    let raw = input_value(binding.input.control, sample);
+    apply_deadzone(raw, binding.dead_zone) * binding.scale
+}
+
+fn input_value(control: Control, sample: ControllerSample) -> f32 {
+    match control {
         Control::GamepadButton(button) => {
             if sample.buttons & (1_u32 << button.value()) != 0 {
                 1.0
@@ -870,8 +882,7 @@ fn binding_value(binding: &Binding, sample: ControllerSample) -> f32 {
         }
         Control::GamepadAxis(axis, direction) => direction.select(sample.axis(axis)),
         Control::Key(_) | Control::MouseButton(_) => 0.0,
-    };
-    apply_deadzone(raw, binding.dead_zone) * binding.scale
+    }
 }
 
 /// Applies the Aurora binding deadzone with an inclusive boundary. The C PAD
@@ -881,6 +892,8 @@ pub fn apply_deadzone(value: f32, deadzone: f32) -> f32 {
     if !value.is_finite() || !deadzone.is_finite() {
         return 0.0;
     }
+    let value = value.clamp(-1.0, 1.0);
+    let deadzone = deadzone.clamp(0.0, 1.0);
     let magnitude = value.abs();
     if magnitude <= deadzone {
         0.0
@@ -901,27 +914,46 @@ fn trigger_value(values: [f32; 33], control: ControlId) -> u8 {
         .get(control as usize)
         .copied()
         .filter(|value| value.is_finite())
-        .map_or(0, |value| (value.clamp(0.0, 1.0) * 255.0).round() as u8)
+        .map_or(0, |value| {
+            let raw = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+            if raw <= 30 { 0 } else { raw.min(180) - 30 }
+        })
 }
 
-fn scaled_axis(values: [f32; 33], control: ControlId, max: i32, xy: i32, min: i32) -> i8 {
-    let value = values
-        .get(control as usize)
-        .copied()
-        .filter(|value| value.is_finite())
-        .unwrap_or(0.0)
-        .clamp(-1.0, 1.0);
-    let raw = (value * 127.0).round() as i32;
-    clamp_stick_pair(raw, 0, max, xy, min).0
+fn scaled_axis_pair(
+    values: [f32; 33],
+    x_control: ControlId,
+    y_control: ControlId,
+    max: i32,
+    xy: i32,
+    min: i32,
+) -> (i8, i8) {
+    let normalized = |control: ControlId| {
+        values
+            .get(control as usize)
+            .copied()
+            .filter(|value| value.is_finite())
+            .unwrap_or(0.0)
+            .clamp(-1.0, 1.0)
+    };
+    let x = (normalized(x_control) * 127.0).round() as i32;
+    let y = (normalized(y_control) * 127.0).round() as i32;
+    clamp_stick_pair(x, y, max, xy, min)
 }
 
 /// The integer `ClampStick` operation from `libs/dolphin/src/pad/Padclamp.c`.
 /// It is public so differential vectors can exercise the exact boundary math.
 pub fn clamp_stick_pair(x: i32, y: i32, max: i32, xy: i32, min: i32) -> (i8, i8) {
-    let sign_x = if x < 0 { -1 } else { 1 };
-    let sign_y = if y < 0 { -1 } else { 1 };
-    let mut x = x.abs();
-    let mut y = y.abs();
+    if max <= 0 || xy <= 0 || xy > max || min < 0 {
+        return (0, 0);
+    }
+    let sign_x = if x < 0 { -1_i64 } else { 1 };
+    let sign_y = if y < 0 { -1_i64 } else { 1 };
+    let mut x = i64::from(x).abs();
+    let mut y = i64::from(y).abs();
+    let max = i64::from(max);
+    let xy = i64::from(xy);
+    let min = i64::from(min);
     if x <= min {
         x = 0;
     } else {
@@ -984,6 +1016,15 @@ mod tests {
             runtime.port(PAD0).expect("port zero exists").status(),
             PortStatus::Connected
         );
+
+        runtime
+            .set_assignment(1, PortAssignment::Controller(99))
+            .expect("secondary assignment is valid before policy enforcement");
+        runtime.enforce_single_port();
+        assert_eq!(
+            runtime.port(1).expect("port one exists").assignment(),
+            PortAssignment::None
+        );
     }
 
     #[test]
@@ -992,6 +1033,9 @@ mod tests {
         assert!((apply_deadzone(0.250_001, 0.25) - 0.000_001).abs() < 0.000_000_1);
         assert_eq!(apply_deadzone(-0.25, 0.25), 0.0);
         assert!((apply_deadzone(-0.5, 0.25) + 0.25).abs() < f32::EPSILON);
+        assert_eq!(apply_deadzone(2.0, 0.25), 0.75);
+        assert_eq!(apply_deadzone(-2.0, -1.0), -1.0);
+        assert_eq!(apply_deadzone(0.5, 2.0), 0.0);
     }
 
     #[test]
@@ -1068,6 +1112,134 @@ mod tests {
     }
 
     #[test]
+    fn pad_status_vectors_match_button_axis_trigger_and_diagonal_boundaries() {
+        let mut runtime = runtime_with_source(11);
+        let mut left_x = Binding::new(
+            PhysicalInput::new(Control::GamepadAxis(
+                GamepadAxis::LeftX,
+                AxisDirection::Full,
+            )),
+            ControlId::LeftX,
+            1.0,
+        );
+        left_x.dead_zone = 0.25;
+        let bindings = vec![
+            Binding::new(
+                PhysicalInput::new(Control::GamepadButton(GamepadButton::South)),
+                ControlId::A,
+                1.0,
+            ),
+            left_x.clone(),
+            Binding::new(
+                PhysicalInput::new(Control::GamepadAxis(
+                    GamepadAxis::LeftY,
+                    AxisDirection::Full,
+                )),
+                ControlId::LeftY,
+                1.0,
+            ),
+            Binding::new(
+                PhysicalInput::new(Control::GamepadAxis(
+                    GamepadAxis::LeftTrigger,
+                    AxisDirection::Positive,
+                )),
+                ControlId::TriggerL,
+                1.0,
+            ),
+        ];
+        runtime
+            .set_bindings(11, bindings)
+            .expect("source profile is valid");
+
+        let neutral = runtime
+            .status(PAD0, ControllerSample::empty(11))
+            .expect("port zero exists");
+        assert_eq!(neutral, PadStatus::zero(PadError::None));
+
+        let deadzone = ControllerSample::empty(11).with_axis(GamepadAxis::LeftX, 0.25);
+        assert_eq!(
+            runtime
+                .status(PAD0, deadzone)
+                .expect("port zero exists")
+                .stick_x,
+            0
+        );
+
+        left_x.dead_zone = 0.0;
+        runtime
+            .set_bindings(
+                11,
+                vec![
+                    Binding::new(
+                        PhysicalInput::new(Control::GamepadButton(GamepadButton::South)),
+                        ControlId::A,
+                        1.0,
+                    ),
+                    left_x,
+                    Binding::new(
+                        PhysicalInput::new(Control::GamepadAxis(
+                            GamepadAxis::LeftY,
+                            AxisDirection::Full,
+                        )),
+                        ControlId::LeftY,
+                        1.0,
+                    ),
+                    Binding::new(
+                        PhysicalInput::new(Control::GamepadAxis(
+                            GamepadAxis::LeftTrigger,
+                            AxisDirection::Positive,
+                        )),
+                        ControlId::TriggerL,
+                        1.0,
+                    ),
+                ],
+            )
+            .expect("source profile is valid");
+
+        let full_diagonal = ControllerSample::empty(11)
+            .with_button(GamepadButton::South, true)
+            .with_axis(GamepadAxis::LeftX, 1.0)
+            .with_axis(GamepadAxis::LeftY, 1.0)
+            .with_axis(GamepadAxis::LeftTrigger, 1.0);
+        let status = runtime
+            .status(PAD0, full_diagonal)
+            .expect("port zero exists");
+        assert_eq!(status.button, PAD_BUTTON_A);
+        assert_eq!((status.stick_x, status.stick_y), (40, 40));
+        assert_eq!(status.trigger_left, 150);
+    }
+
+    #[test]
+    fn held_input_gates_binding_without_changing_repeated_updates() {
+        let mut runtime = runtime_with_source(12);
+        let mut binding = Binding::new(
+            PhysicalInput::new(Control::GamepadButton(GamepadButton::South)),
+            ControlId::A,
+            1.0,
+        );
+        binding.held.push(crate::binding::HeldInput {
+            input: PhysicalInput::new(Control::GamepadButton(GamepadButton::Back)),
+            threshold: 0.5,
+        });
+        runtime
+            .set_bindings(12, vec![binding])
+            .expect("source profile is valid");
+        let pressed = ControllerSample::empty(12).with_button(GamepadButton::South, true);
+        assert_eq!(
+            runtime
+                .status(PAD0, pressed)
+                .expect("port zero exists")
+                .button,
+            0
+        );
+        let held = pressed.with_button(GamepadButton::Back, true);
+        let first = runtime.status(PAD0, held).expect("port zero exists");
+        let second = runtime.status(PAD0, held).expect("port zero exists");
+        assert_eq!(first, second);
+        assert_eq!(first.button, PAD_BUTTON_A);
+    }
+
+    #[test]
     fn disconnect_and_transport_errors_zero_status() {
         let mut runtime = runtime_with_source(9);
         let pressed = ControllerSample::empty(9).with_button(GamepadButton::South, true);
@@ -1091,6 +1263,48 @@ mod tests {
         failed.error = PadError::Transfer;
         let status = runtime.status(PAD0, failed).expect("port zero exists");
         assert_eq!(status, PadStatus::zero(PadError::Transfer));
+        let unknown = ControllerSample {
+            error: PadError::Unknown(-99),
+            ..pressed
+        };
+        assert_eq!(
+            runtime.status(PAD0, unknown).expect("port zero exists"),
+            PadStatus::zero(PadError::Unknown(-99))
+        );
+        assert_eq!(
+            runtime
+                .status(PAD0, ControllerSample::empty(123))
+                .expect("port zero exists"),
+            PadStatus::zero(PadError::NoController)
+        );
+    }
+
+    #[test]
+    fn reconnect_and_reset_from_snapshot_are_deterministic() {
+        let mut runtime = runtime_with_source(13);
+        let sample = ControllerSample::empty(13).with_button(GamepadButton::South, true);
+        let expected = runtime.status(PAD0, sample).expect("port zero exists");
+        runtime.disconnect(13).expect("source was assigned");
+        assert_eq!(
+            runtime.status(PAD0, sample).expect("port zero exists"),
+            PadStatus::zero(PadError::NoController)
+        );
+        runtime.reconnect(13).expect("source was retained");
+        assert_eq!(
+            runtime.status(PAD0, sample).expect("port zero exists"),
+            expected
+        );
+
+        let restored =
+            ControllerRuntime::deserialize(&runtime.serialize()).expect("valid snapshot");
+        assert_eq!(
+            restored,
+            ControllerRuntime::deserialize(&restored.serialize()).expect("stable snapshot")
+        );
+        assert_eq!(
+            restored.port(PAD0).expect("port zero exists").status(),
+            PortStatus::Disconnected
+        );
     }
 
     #[test]
@@ -1169,5 +1383,7 @@ mod tests {
         }
         println!("focused differential vectors: {matched}");
         assert_eq!(matched, 5);
+        assert_eq!(clamp_stick_pair(i32::MIN, i32::MIN, 72, 40, 0), (-40, -40));
+        assert_eq!(clamp_stick_pair(72, 72, 0, 40, 0), (0, 0));
     }
 }

@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::Range;
 
+use crate::image::{DiscImage, ImageError};
 use crate::yaz0::{self, Yaz0Error};
 
 /// RARC header size in bytes.
@@ -155,6 +156,25 @@ pub enum RarcError {
     },
     /// The explicit Yaz0 wrapper failed.
     Yaz0(Yaz0Error),
+    /// The logical disc backend failed while handing off archive bytes.
+    Image(ImageError),
+    /// An archive range overflows or lies beyond the logical disc.
+    ImageRange {
+        /// Logical archive start offset.
+        offset: u64,
+        /// Declared archive length.
+        length: u64,
+        /// Logical image length.
+        image_size: u64,
+    },
+    /// The archive declares more bytes than the caller permits the handoff to
+    /// allocate.
+    ImageLimit {
+        /// Declared archive length.
+        declared: u32,
+        /// Caller-provided allocation limit.
+        limit: usize,
+    },
 }
 
 impl fmt::Display for RarcError {
@@ -213,6 +233,21 @@ impl fmt::Display for RarcError {
             Self::NotFound { path } => write!(f, "RARC path does not exist: {path}"),
             Self::NotDirectory { path } => write!(f, "RARC path is not a directory: {path}"),
             Self::Yaz0(error) => write!(f, "Yaz0 wrapper failed: {error:?}"),
+            Self::Image(error) => write!(f, "RARC image handoff failed: {error:?}"),
+            Self::ImageRange {
+                offset,
+                length,
+                image_size,
+            } => write!(
+                f,
+                "RARC image range {offset}+{length} exceeds logical size {image_size}"
+            ),
+            Self::ImageLimit { declared, limit } => {
+                write!(
+                    f,
+                    "RARC archive length {declared} exceeds handoff limit {limit}"
+                )
+            }
         }
     }
 }
@@ -453,6 +488,75 @@ impl RarcArchive {
         };
         archive.initialize_lookup()?;
         Ok(archive)
+    }
+
+    /// Reads one bounded, already-unwrapped RARC from a logical disc image.
+    ///
+    /// The archive's declared file length is checked against both
+    /// `max_size` and the image's logical size before allocation. This is the
+    /// content handoff equivalent of Aurora's DVD file reads and works for
+    /// raw ISO as well as sparse CISO images without requiring bundled data.
+    pub fn parse_from_image(
+        image: &mut dyn DiscImage,
+        offset: u64,
+        max_size: usize,
+    ) -> Result<Self, RarcError> {
+        let image_size = image.logical_size();
+        let header_end = offset
+            .checked_add(HEADER_SIZE as u64)
+            .ok_or(RarcError::ImageRange {
+                offset,
+                length: HEADER_SIZE as u64,
+                image_size,
+            })?;
+        if header_end > image_size {
+            return Err(RarcError::Truncated {
+                needed: HEADER_SIZE,
+                actual: image_size.saturating_sub(offset) as usize,
+            });
+        }
+
+        let mut header = [0u8; HEADER_SIZE];
+        read_image_exact(image, offset, &mut header)?;
+        if header[..4] != MAGIC {
+            return Self::parse(&header);
+        }
+        let declared = read_u32(&header, 0x04);
+        let declared_usize = usize::try_from(declared).map_err(|_| RarcError::ImageLimit {
+            declared,
+            limit: max_size,
+        })?;
+        if declared_usize > max_size {
+            return Err(RarcError::ImageLimit {
+                declared,
+                limit: max_size,
+            });
+        }
+        if declared_usize < HEADER_SIZE {
+            return Self::parse(&header);
+        }
+        let archive_end = offset
+            .checked_add(u64::from(declared))
+            .ok_or(RarcError::ImageRange {
+                offset,
+                length: u64::from(declared),
+                image_size,
+            })?;
+        if archive_end > image_size {
+            return Err(RarcError::ImageRange {
+                offset,
+                length: u64::from(declared),
+                image_size,
+            });
+        }
+        let mut bytes = vec![0u8; declared_usize];
+        bytes[..HEADER_SIZE].copy_from_slice(&header);
+        read_image_exact(
+            image,
+            offset + HEADER_SIZE as u64,
+            &mut bytes[HEADER_SIZE..],
+        )?;
+        Self::parse(&bytes)
     }
 
     /// Decode an explicitly supplied Yaz0-wrapped RARC buffer and parse it.
@@ -699,6 +803,34 @@ fn read_u32(bytes: &[u8], offset: usize) -> u32 {
         bytes[offset + 2],
         bytes[offset + 3],
     ])
+}
+
+fn read_image_exact(
+    image: &mut dyn DiscImage,
+    offset: u64,
+    output: &mut [u8],
+) -> Result<(), RarcError> {
+    let mut filled = 0;
+    while filled < output.len() {
+        let at = offset
+            .checked_add(filled as u64)
+            .ok_or(RarcError::ImageRange {
+                offset,
+                length: output.len() as u64,
+                image_size: image.logical_size(),
+            })?;
+        let read = image
+            .read_at(at, &mut output[filled..])
+            .map_err(RarcError::Image)?;
+        if read == 0 {
+            return Err(RarcError::Truncated {
+                needed: output.len(),
+                actual: filled,
+            });
+        }
+        filled += read;
+    }
+    Ok(())
 }
 
 fn checked_table_range(

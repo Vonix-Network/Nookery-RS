@@ -9,12 +9,21 @@
 mod adapters;
 mod error;
 mod executor;
+mod ffi;
 mod runtime;
 mod schedule;
 
 pub use adapters::{AudioAdapter, HostErrorCode, PlatformAdapter, RendererAdapter};
 pub use error::{CallbackKind, Operation, RuntimeError};
 pub use executor::{Executor, ExecutorError, ExecutorReport, StackFrame, UnresolvedReport};
+pub use ffi::{
+    NookeryRuntimeCallbackStatus, NookeryRuntimeCallbacks, NookeryRuntimeConfig,
+    NookeryRuntimeFrameCallback, NookeryRuntimeGap, NookeryRuntimeHandle,
+    NookeryRuntimeResizeCallback, NookeryRuntimeScreenCallback, NookeryRuntimeStatus,
+    NookeryRuntimeVoidCallback, RUNTIME_GAPS, nookery_runtime_boot, nookery_runtime_create,
+    nookery_runtime_destroy, nookery_runtime_frame, nookery_runtime_prenmi, nookery_runtime_reset,
+    nookery_runtime_resize, nookery_runtime_shutdown,
+};
 pub use runtime::{
     CallbackRegistry, FrameCallback, FrameContext, FrameReport, GameCallback, GameState,
     GameTransition, GraphState, Lifecycle, LifecycleState, ResetStatus, ResizeCallback, Runtime,

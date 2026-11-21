@@ -440,10 +440,10 @@ fn inspect_error_is_the_status_mapping() {
 }
 
 #[test]
-fn undecodable_containers_are_reported_as_invalid_image_not_a_hash_mismatch() {
-    // Container decoding (RVZ/CISO/GCZ/WBFS/WIA/NFS/TGC) lives in `nod`, which is
-    // not in this repository, so this crate cannot open a compressed image. The
-    // contract is that an adapter which cannot decode the container reports
+fn undecodable_platform_containers_are_reported_as_invalid_image_not_a_hash_mismatch() {
+    // Platform-backed container decoding (RVZ/GCZ/WBFS/WIA/NFS/TGC) lives in
+    // `nod`, which is not in this repository. The contract is that an adapter
+    // which cannot decode the container reports
     // `ImageError::Format`, which must surface as `InvalidImage` — never as
     // `HashMismatch`, which would tell the user a valid image is corrupt.
     let mut image = FailingImage::new(ImageError::Format, 0x400);

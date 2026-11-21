@@ -25,15 +25,14 @@
 //! # Explicit unsupported boundary
 //!
 //! Upstream reaches the image through an `SDL_IOStream` and hands it to `nod`,
-//! which decompresses RVZ/CISO/GCZ/WBFS/WIA/NFS/TGC and strips Wii partition
-//! framing to produce a *logical* image.  That runtime is not in this repository
-//! (the `extern/borealis` and `extern/aurora` submodules are unpopulated in this
-//! worktree at this pin, and `nod` is supplied by CMake as `aurora::dvd` or
-//! `nod::nod`), so this crate takes a [`image::DiscImage`] instead:
+//! which reconstructs RVZ/CISO/GCZ/WBFS/WIA/NFS/TGC and strips Wii partition
+//! framing to produce a *logical* image. This crate reconstructs the
+//! self-contained GameCube/Wii CISO map and exposes [`image::DiscStream`] for
+//! the remaining platform-backed formats:
 //!
 //! | Upstream | Here |
 //! |---|---|
-//! | `SDL_IOStream`, `DiscStream` callbacks | caller-supplied [`image::DiscImage`] |
+//! | `SDL_IOStream`, `DiscStream` callbacks | [`image::DiscStream`] / [`image::DiscImage`] |
 //! | `nod_disc_open_stream`, `nod_free` | not ported |
 //! | `nod_disc_header` | [`header::decode`] on the first 0x400 bytes |
 //! | `nod_disc_size` | [`image::DiscImage::logical_size`] |
@@ -43,9 +42,9 @@
 //! An adapter that cannot decode a container must return
 //! [`image::ImageError::Format`]; hashing compressed bytes would misreport a
 //! valid image as [`ValidationError::HashMismatch`].
-//! [`stream_verify::verify_path`] makes this boundary explicit for RVZ/CISO by
+//! [`stream_verify::verify_path`] makes this boundary explicit for RVZ by
 //! returning `Status::Failed` with a decoder-unavailable diagnostic after
-//! bounded header/index inspection.
+//! bounded header inspection. CISO is verified through its logical sparse map.
 //!
 //! Also out of scope, because no source evidence establishes them as pure
 //! catalog operations: the prelaunch UI state machine, settings persistence
@@ -71,6 +70,7 @@
 #![deny(missing_docs)]
 
 pub mod catalog;
+pub mod ciso;
 pub mod engine;
 pub mod error;
 pub mod hash;
@@ -84,11 +84,15 @@ pub mod stream_verify;
 pub mod yaz0;
 
 pub use catalog::{AcceptedDisc, Catalog, UPSTREAM};
+pub use ciso::{
+    CisoError, CisoImage, CisoMetadata, GAMECUBE_BLOCK_SIZE, GAMECUBE_LOGICAL_BLOCKS,
+    GAMECUBE_LOGICAL_SIZE,
+};
 pub use engine::{HASH_BUFFER_SIZE, inspect, inspect_error, verify, verify_simple};
 pub use error::{ValidationError, validation_error};
 pub use hash::{Digest128, Hasher, ParseDigestError};
 pub use header::{HEADER_SIZE, Header, HeaderError, Platform};
-pub use image::{Bytes, DiscImage, ImageError};
+pub use image::{Bytes, DiscImage, DiscStream, ImageError, StreamError};
 pub use log::{
     VerificationState, verification_from_config, verification_log_line, verification_to_config,
 };
@@ -99,8 +103,8 @@ pub use rarc::{
 };
 pub use status::Status;
 pub use stream_verify::{
-    CISO_HEADER_SIZE, CISO_MAGIC, CISO_MIN_BLOCK_SIZE, ContainerKind, ContainerMetadata, RVZ_MAGIC,
-    StreamVerifyError, inspect_path, inspect_stream, verify_path,
+    CISO_HEADER_SIZE, CISO_MAGIC, CISO_MAP_SIZE, CISO_MIN_BLOCK_SIZE, ContainerKind,
+    ContainerMetadata, RVZ_MAGIC, StreamVerifyError, inspect_path, inspect_stream, verify_path,
 };
 pub use yaz0::{
     HEADER_SIZE as YAZ0_HEADER_SIZE, MAGIC as YAZ0_MAGIC, Yaz0Error, decode as yaz0_decode,

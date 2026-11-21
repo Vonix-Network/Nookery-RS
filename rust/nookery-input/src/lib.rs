@@ -47,6 +47,7 @@ pub use controller_runtime::{
     PAD_BUTTON_DOWN, PAD_BUTTON_LEFT, PAD_BUTTON_RIGHT, PAD_BUTTON_START, PAD_BUTTON_UP,
     PAD_BUTTON_X, PAD_BUTTON_Y, PAD_MAX_CONTROLLERS, PAD_TRIGGER_L, PAD_TRIGGER_R, PAD_TRIGGER_Z,
     PAD0, PadError, PadStatus, PortAssignment, PortStatus, RuntimeError, SnapshotError,
+    apply_deadzone, clamp_stick_pair,
 };
 
 pub use binding::{

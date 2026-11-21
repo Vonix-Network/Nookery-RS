@@ -1,6 +1,6 @@
 //! Synthetic RARC vectors and mutation guards.
 
-use nookery_disc::{RarcArchive, RarcError};
+use nookery_disc::{Bytes, RarcArchive, RarcError};
 
 const HEADER: usize = 0x20;
 const INFO: usize = 0x130;
@@ -170,4 +170,31 @@ fn entry_length_mutation_is_rejected_as_data_overflow() {
     assert_error(&raw, |error| {
         matches!(error, RarcError::DataRangeOverflow { .. })
     });
+}
+
+#[test]
+fn bounded_image_handoff_reads_a_rarc_from_logical_disc_bytes() {
+    let raw = synthetic_rarc();
+    let offset = 0x180usize;
+    let mut logical = vec![0u8; offset + raw.len() + 3];
+    logical[offset..offset + raw.len()].copy_from_slice(&raw);
+    let mut image = Bytes::new(&logical);
+    let archive =
+        RarcArchive::parse_from_image(&mut image, offset as u64, raw.len()).expect("RARC handoff");
+    assert_eq!(
+        archive.get_file("root/dir/nested.bin").unwrap().data(),
+        b"nestDI"
+    );
+
+    let mut image = Bytes::new(&logical);
+    assert!(matches!(
+        RarcArchive::parse_from_image(&mut image, offset as u64, raw.len() - 1),
+        Err(RarcError::ImageLimit { .. })
+    ));
+
+    let mut image = Bytes::new(&logical);
+    assert!(matches!(
+        RarcArchive::parse_from_image(&mut image, u64::MAX, raw.len()),
+        Err(RarcError::ImageRange { .. })
+    ));
 }

@@ -11,7 +11,10 @@ rust-version = "1.85"
 opt-level = 3
 lto = "thin"
 codegen-units = 1
-panic = "abort"
+# Cargo does not permit `panic` in a package-specific profile. The runtime's
+# exported FFI boundary catches callback panics, so release must retain unwind
+# support for the workspace build that contains it.
+panic = "unwind"
 strip = "symbols"
 
 [profile.dev]

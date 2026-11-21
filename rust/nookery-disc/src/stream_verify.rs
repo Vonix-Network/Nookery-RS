@@ -1,10 +1,10 @@
 //! Bounded container inspection and file-backed logical-image verification.
 //!
-//! RVZ and CISO parsing stops at their checked header metadata because the
-//! Aurora/NOD decoders are not present in this worktree. A valid compressed
-//! header therefore returns [`StreamVerifyError::DecoderUnavailable`] instead
-//! of being mistaken for a logical disc image. Raw ISO/GCM images are already
-//! logical images and can use the existing catalog/hash engine directly.
+//! RVZ parsing stops at checked header metadata because the Aurora/NOD RVZ
+//! decoder is not present in this worktree. GameCube/Wii CISO is self-contained:
+//! its sparse block map is reconstructed into a logical read view and sent
+//! through the normal header/hash engine. Raw ISO/GCM images are logical views
+//! already.
 
 use std::fmt;
 use std::fs::{self, File};
@@ -12,6 +12,7 @@ use std::io::{self, Read, Seek, SeekFrom};
 use std::path::Path;
 
 use crate::catalog::Catalog;
+use crate::ciso::{self, CisoError, CisoImage};
 use crate::engine;
 use crate::header::{self, Header};
 use crate::image::{DiscImage, ImageError};
@@ -66,12 +67,14 @@ impl std::error::Error for StreamVerifyError {}
 
 /// RVZ magic from the RVZ/WIA container family.
 pub const RVZ_MAGIC: [u8; 4] = *b"RVZ\0";
-/// CISO magic.
+/// GameCube/Wii CISO magic.
 pub const CISO_MAGIC: [u8; 4] = *b"CISO";
-/// Fixed CISO header length.
-pub const CISO_HEADER_SIZE: usize = 0x18;
+/// Fixed GameCube/Wii CISO header length.
+pub const CISO_HEADER_SIZE: usize = ciso::HEADER_SIZE;
+/// Number of GameCube/Wii CISO map bytes.
+pub const CISO_MAP_SIZE: usize = ciso::MAP_SIZE;
 /// Minimum CISO block size supported by the on-disk format.
-pub const CISO_MIN_BLOCK_SIZE: u32 = 0x800;
+pub const CISO_MIN_BLOCK_SIZE: u32 = ciso::GAMECUBE_BLOCK_SIZE;
 
 /// Metadata obtained without decoding or loading a container into memory.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -153,10 +156,8 @@ pub fn inspect_path(
     inspect_stream(&mut file, source_size, cancel, extension_kind(path))
 }
 
-/// Verify a raw ISO/GCM path with bounded reads and the existing catalog.
-///
-/// RVZ and CISO are inspected first. A valid compressed header returns a
-/// [`Result`] with `Status::Failed` and an explicit decoder-unavailable message;
+/// Verify an ISO/GCM or GameCube/Wii CISO path with bounded reads and the
+/// existing catalog. RVZ remains an explicit decoder-unavailable boundary;
 /// compressed bytes are never hashed as if they were a logical image.
 pub fn verify_path(
     path: &Path,
@@ -177,8 +178,16 @@ pub fn verify_path(
         Ok(metadata) => metadata,
         Err(error) => return mapped_error(error),
     };
-    if matches!(metadata.kind, ContainerKind::Rvz | ContainerKind::Ciso) {
+    if metadata.kind == ContainerKind::Rvz {
         return mapped_error(StreamVerifyError::DecoderUnavailable(metadata.kind));
+    }
+
+    if metadata.kind == ContainerKind::Ciso {
+        let mut image = match CisoImage::open(&mut file) {
+            Ok(image) => image,
+            Err(error) => return mapped_error(ciso_error(error)),
+        };
+        return engine::verify(&mut image, catalog, cancel, on_progress);
     }
 
     let mut image = FileImage {
@@ -193,59 +202,55 @@ fn inspect_ciso<R: Read + Seek>(
     source_size: u64,
     cancel: &dyn Cancellation,
 ) -> std::result::Result<ContainerMetadata, StreamVerifyError> {
-    reader
-        .seek(SeekFrom::Start(0))
-        .map_err(|_| StreamVerifyError::Io)?;
-    let mut bytes = [0u8; CISO_HEADER_SIZE];
-    read_exact_cancelable(reader, &mut bytes, cancel)?;
-
-    let header_size = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
-    let total_bytes = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
-    let block_size = u32::from_le_bytes(bytes[16..20].try_into().unwrap());
-    let version = bytes[20];
-    let align = bytes[21];
-    if header_size < CISO_HEADER_SIZE as u32
-        || total_bytes == 0
-        || block_size < CISO_MIN_BLOCK_SIZE
-        || !block_size.is_power_of_two()
-        || version != 1
-        || align > 31
-    {
+    let mut image = CisoImage::open(reader).map_err(ciso_error)?;
+    if cancel.is_canceled() {
+        return Err(StreamVerifyError::Cancelled);
+    }
+    let mut raw_header = [0u8; header::HEADER_SIZE];
+    read_image_exact(&mut image, &mut raw_header)?;
+    let decoded = header::decode(&raw_header).map_err(|_| StreamVerifyError::InvalidHeader)?;
+    if decoded.platform == crate::Platform::Unknown {
         return Err(StreamVerifyError::InvalidHeader);
     }
-    if u64::from(header_size) > source_size {
-        return Err(StreamVerifyError::ShortRead);
-    }
-
-    let index_entries = total_bytes
-        .checked_add(u64::from(block_size) - 1)
-        .and_then(|value| value.checked_div(u64::from(block_size)))
-        .ok_or(StreamVerifyError::InvalidHeader)?;
-    let index_bytes = index_entries
-        .checked_mul(4)
-        .ok_or(StreamVerifyError::InvalidHeader)?;
-    let data_offset = u64::from(header_size)
-        .checked_add(index_bytes)
-        .ok_or(StreamVerifyError::InvalidHeader)?;
-    if data_offset > source_size {
-        return Err(StreamVerifyError::ShortRead);
-    }
-    reader
-        .seek(SeekFrom::Start(u64::from(header_size)))
-        .map_err(|_| StreamVerifyError::Io)?;
-    let mut index_entry = [0u8; 4];
-    for _ in 0..index_entries {
-        read_exact_cancelable(reader, &mut index_entry, cancel)?;
-    }
+    let ciso = image.metadata().clone();
 
     Ok(ContainerMetadata {
         kind: ContainerKind::Ciso,
         source_size,
-        logical_size: Some(total_bytes),
-        header: None,
-        block_size: Some(block_size),
-        index_entries: Some(index_entries),
+        logical_size: Some(ciso.logical_size),
+        header: Some(decoded),
+        block_size: Some(ciso.block_size),
+        index_entries: Some(ciso.logical_blocks),
     })
+}
+
+fn read_image_exact(
+    image: &mut dyn DiscImage,
+    output: &mut [u8],
+) -> std::result::Result<(), StreamVerifyError> {
+    let mut filled = 0;
+    while filled < output.len() {
+        let read = image
+            .read_at(filled as u64, &mut output[filled..])
+            .map_err(|_| StreamVerifyError::Io)?;
+        if read == 0 {
+            return Err(StreamVerifyError::ShortRead);
+        }
+        filled += read;
+    }
+    Ok(())
+}
+
+fn ciso_error(error: CisoError) -> StreamVerifyError {
+    match error {
+        CisoError::ShortHeader { .. } | CisoError::ShortData { .. } => StreamVerifyError::ShortRead,
+        CisoError::Io => StreamVerifyError::Io,
+        CisoError::WrongMagic
+        | CisoError::InvalidBlockSize { .. }
+        | CisoError::InvalidMapValue { .. }
+        | CisoError::MissingHeaderBlock
+        | CisoError::Overflow => StreamVerifyError::InvalidHeader,
+    }
 }
 
 fn read_exact_cancelable<R: Read>(
@@ -341,6 +346,18 @@ mod tests {
     use std::io::Cursor;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    fn ciso_bytes(block_size: usize, map: &[u8], blocks: &[&[u8]]) -> Vec<u8> {
+        let mut bytes = vec![0u8; CISO_HEADER_SIZE];
+        bytes[..4].copy_from_slice(&CISO_MAGIC);
+        bytes[4..8].copy_from_slice(&(block_size as u32).to_le_bytes());
+        bytes[8..8 + map.len()].copy_from_slice(map);
+        for block in blocks {
+            assert_eq!(block.len(), block_size);
+            bytes.extend_from_slice(block);
+        }
+        bytes
+    }
+
     #[test]
     fn rvz_short_header_is_a_short_read() {
         let mut source = Cursor::new(b"RVZ");
@@ -391,15 +408,13 @@ mod tests {
 
     #[test]
     fn malformed_ciso_version_is_an_invalid_header() {
-        let mut header = [0u8; CISO_HEADER_SIZE];
-        header[0..4].copy_from_slice(&CISO_MAGIC);
-        header[4..8].copy_from_slice(&(CISO_HEADER_SIZE as u32).to_le_bytes());
-        header[8..16].copy_from_slice(&(0x1000u64).to_le_bytes());
-        header[16..20].copy_from_slice(&0x800u32.to_le_bytes());
-        header[20] = 2;
-        let mut source = Cursor::new(header);
+        let mut bytes = vec![0u8; CISO_HEADER_SIZE];
+        bytes[..4].copy_from_slice(&CISO_MAGIC);
+        bytes[4..8].copy_from_slice(&0x100u32.to_le_bytes());
+        bytes[8] = 1;
+        let mut source = Cursor::new(bytes);
         assert_eq!(
-            inspect_stream(&mut source, 0x20, &crate::Never, None),
+            inspect_stream(&mut source, CISO_HEADER_SIZE as u64, &crate::Never, None),
             Err(StreamVerifyError::InvalidHeader)
         );
     }
@@ -430,44 +445,56 @@ mod tests {
 
     #[test]
     fn ciso_metadata_is_checked_without_allocating_an_index() {
-        let mut header = [0u8; CISO_HEADER_SIZE];
-        header[0..4].copy_from_slice(&CISO_MAGIC);
-        header[4..8].copy_from_slice(&(CISO_HEADER_SIZE as u32).to_le_bytes());
-        header[8..16].copy_from_slice(&(0x1000u64).to_le_bytes());
-        header[16..20].copy_from_slice(&0x800u32.to_le_bytes());
-        header[20] = 1;
-        let mut bytes = header.to_vec();
-        bytes.extend_from_slice(&[0u8; 8]);
+        let mut block0 = vec![0u8; ciso::GAMECUBE_BLOCK_SIZE as usize];
+        block0[..6].copy_from_slice(b"GAFE01");
+        block0[28..32].copy_from_slice(&crate::header::GCN_MAGIC);
+        let block1 = vec![0u8; ciso::GAMECUBE_BLOCK_SIZE as usize];
+        let bytes = ciso_bytes(
+            ciso::GAMECUBE_BLOCK_SIZE as usize,
+            &[1, 1],
+            &[&block0, &block1],
+        );
         let mut source = Cursor::new(bytes);
         assert_eq!(
             inspect_stream(
                 &mut source,
-                (CISO_HEADER_SIZE + 8) as u64,
+                (CISO_HEADER_SIZE + 2 * ciso::GAMECUBE_BLOCK_SIZE as usize) as u64,
                 &crate::Never,
-                None
+                None,
             ),
             Ok(ContainerMetadata {
                 kind: ContainerKind::Ciso,
-                source_size: 0x20,
-                logical_size: Some(0x1000),
-                header: None,
-                block_size: Some(0x800),
-                index_entries: Some(2),
+                source_size: (CISO_HEADER_SIZE + 2 * ciso::GAMECUBE_BLOCK_SIZE as usize) as u64,
+                logical_size: Some(ciso::GAMECUBE_LOGICAL_SIZE),
+                header: Some(crate::Header {
+                    game_id: *b"GAFE01",
+                    disc_number: 0,
+                    revision: 0,
+                    title: Vec::new(),
+                    platform: crate::Platform::GameCube,
+                }),
+                block_size: Some(ciso::GAMECUBE_BLOCK_SIZE),
+                index_entries: Some(ciso::GAMECUBE_LOGICAL_BLOCKS as u64),
             })
         );
     }
 
     #[test]
     fn ciso_truncated_index_is_a_short_read() {
-        let mut header = [0u8; CISO_HEADER_SIZE];
-        header[0..4].copy_from_slice(&CISO_MAGIC);
-        header[4..8].copy_from_slice(&(CISO_HEADER_SIZE as u32).to_le_bytes());
-        header[8..16].copy_from_slice(&(0x1000u64).to_le_bytes());
-        header[16..20].copy_from_slice(&0x800u32.to_le_bytes());
-        header[20] = 1;
-        let mut source = Cursor::new(header);
+        let mut bytes = vec![0u8; CISO_HEADER_SIZE];
+        bytes[..4].copy_from_slice(&CISO_MAGIC);
+        bytes[4..8].copy_from_slice(&ciso::GAMECUBE_BLOCK_SIZE.to_le_bytes());
+        bytes[8] = 1;
+        bytes[9] = 1;
+        bytes.extend_from_slice(&vec![0u8; ciso::GAMECUBE_BLOCK_SIZE as usize - 1]);
+        let mut source = Cursor::new(bytes);
         assert_eq!(
-            inspect_stream(&mut source, 0x20, &crate::Never, None),
+            inspect_stream(
+                &mut source,
+                (CISO_HEADER_SIZE + ciso::GAMECUBE_BLOCK_SIZE as usize - 1) as u64,
+                &crate::Never,
+                None
+            ),
             Err(StreamVerifyError::ShortRead)
         );
     }

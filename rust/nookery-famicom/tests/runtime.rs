@@ -120,7 +120,7 @@ fn official_cpu_addressing_stack_rmw_and_register_boundaries_run_end_to_end() {
 
     assert_eq!(core.ram()[0x00], 0x42, "indexed-indirect store");
     assert_eq!(core.ram()[0x01], 0x33, "indirect-indexed store");
-    assert_eq!(core.ram()[0x10], 1, "controller shift register read");
+    assert_eq!(core.ram()[0x10], 0x41, "controller open-bus read");
     assert_eq!(core.ram()[0x11], 0xff, "zero-page read-modify-write");
     assert_eq!(core.ram()[0x12], 0xff, "stack push/pop and PLA");
     assert_eq!(core.ram()[0x13], 0x99, "JMP indirect target");
@@ -247,7 +247,96 @@ fn oam_dma_copies_a_cpu_page_through_ppu_oam() {
     core.frame().expect("OAM DMA executes");
     assert_eq!(core.ppu_oam()[0], 0xa5);
     assert_eq!(core.ppu_oam()[1], 0);
-    assert!(NesCore::gaps().contains(&nookery_famicom::core::CoreGap::OamDmaCycleStealing));
+}
+
+#[test]
+fn controller_reads_preserve_fixnes_open_bus_upper_bits_through_cpu_bus() {
+    let program = [
+        0xa9, 0x01, 0x8d, 0x16, 0x40, // strobe high
+        0xa9, 0x00, 0x8d, 0x16, 0x40, // then low, reset controller position
+        0xad, 0x16, 0x40, 0x85, 0x20, // A=0, upper bits must remain $40
+        0xad, 0x16, 0x40, 0x85, 0x21, // next bit remains open-bus $40
+        0x4c, 0x0a, 0x80,
+    ];
+    let image = RomImage::parse(fixture_rom(&program)).expect("controller fixture");
+    let mut core = NesCore::new(&image);
+    core.set_input(0x00);
+    core.frame().expect("controller fixture executes");
+    assert_eq!(core.ram()[0x20], 0x40);
+    assert_eq!(core.ram()[0x21], 0x40);
+}
+
+#[test]
+fn oam_dma_total_stall_does_not_claim_per_cycle_timing_parity() {
+    assert!(NesCore::gaps().contains(&nookery_famicom::core::CoreGap::OamDmaTiming));
+}
+
+#[test]
+fn oam_dma_adds_the_hardware_stall_to_frame_cadence() {
+    let no_dma = [
+        0xa9, 0x00, 0x8d, 0x03, 0x20, // OAMADDR = 0
+        0xa9, 0xa5, 0x8d, 0x00, 0x02, // CPU page $02, byte 0 = $a5
+        0xa9, 0x02, 0x8d, 0x13, 0x40, // Same-cycle non-DMA register write
+        0x4c, 0x12, 0x80, // Enter the post-DMA loop once
+        0xe6, 0x10, // INC $10
+        0x4c, 0x12, 0x80,
+    ];
+    let with_dma = [
+        0xa9, 0x00, 0x8d, 0x03, 0x20, // OAMADDR = 0
+        0xa9, 0xa5, 0x8d, 0x00, 0x02, // CPU page $02, byte 0 = $a5
+        0xa9, 0x02, 0x8d, 0x14, 0x40, // OAMDMA page $02
+        0x4c, 0x12, 0x80, // Enter the post-DMA loop once
+        0xe6, 0x10, // INC $10
+        0x4c, 0x12, 0x80,
+    ];
+    let mut baseline = NesCore::new(&RomImage::parse(fixture_rom(&no_dma)).unwrap());
+    let mut dma = NesCore::new(&RomImage::parse(fixture_rom(&with_dma)).unwrap());
+    let baseline_frame = baseline.frame().expect("baseline fixture executes");
+    let dma_frame = dma.frame().expect("DMA fixture executes");
+
+    assert_eq!(baseline_frame.oam_dma_cycles, 0);
+    assert_eq!(dma_frame.oam_dma_cycles, 513);
+    assert!(
+        dma.ram()[0x10] < baseline.ram()[0x10],
+        "the DMA stall must reduce post-DMA loop iterations"
+    );
+    assert_eq!(dma.ppu_oam()[0], 0xa5);
+}
+
+#[test]
+fn oam_dma_uses_the_extra_alignment_cycle_on_an_odd_boundary() {
+    let program = [
+        0xd0, 0x00, // Taken branch: make the $4014 write end on an odd cycle.
+        0xa9, 0x00, 0x8d, 0x03, 0x20, // OAMADDR = 0
+        0xa9, 0xa5, 0x8d, 0x00, 0x02, // CPU page $02, byte 0 = $a5
+        0xa9, 0x02, 0x8d, 0x14, 0x40, // OAMDMA page $02
+        0x4c, 0x14, 0x80, // Enter a loop without another DMA request
+        0xe6, 0x10, // INC $10
+        0x4c, 0x14, 0x80,
+    ];
+    let image = RomImage::parse(fixture_rom(&program)).expect("odd-cycle DMA fixture");
+    let mut core = NesCore::new(&image);
+    let frame = core.frame().expect("odd-cycle DMA executes");
+
+    assert_eq!(frame.oam_dma_cycles, 514);
+    assert_eq!(core.ppu_oam()[0], 0xa5);
+}
+
+#[test]
+fn oam_dma_wraps_oam_address_at_the_256_byte_boundary() {
+    let program = [
+        0xa9, 0xff, 0x8d, 0x03, 0x20, // OAMADDR = $ff
+        0xa9, 0x5a, 0x8d, 0xff, 0x00, // CPU page $00, byte $ff = $5a
+        0xa9, 0x00, 0x8d, 0x14, 0x40, // OAMDMA page $00
+        0x4c, 0x0f, 0x80, // Loop without another DMA request
+    ];
+    let image = RomImage::parse(fixture_rom(&program)).expect("OAM wrap fixture");
+    let mut core = NesCore::new(&image);
+    core.frame().expect("OAM wrap executes");
+
+    assert_eq!(core.ppu_oam()[0xff], 0);
+    // Source $00ff lands at OAM $fe; fixNES masks attribute-byte bits there.
+    assert_eq!(core.ppu_oam()[0xfe], 0x42);
 }
 
 #[test]

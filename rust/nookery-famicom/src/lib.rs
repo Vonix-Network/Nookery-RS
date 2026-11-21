@@ -24,8 +24,9 @@
 //!
 //! * No mapper beyond mapper 0, APU synthesis, DMC DMA, unofficial opcodes,
 //!   or exact mid-scanline PPU timing/NMI sequencing. OAM DMA copies the
-//!   requested page through the PPU path, but its 513/514-cycle CPU stall is
-//!   an explicit [`core::CoreGap::OamDmaCycleStealing`].
+//!   requested page through the PPU path and accounts for its 513/514-cycle
+//!   CPU stall, while its per-cycle read/write/PPU-dot interleaving remains a
+//!   typed gap.
 //! * No audio, framebuffer, GX, JFWDisplay or window calls. `JW_BeginFrame`,
 //!   `famicom->disable_display = 1`, `JC_JFWDisplay_startFadeOut` and the
 //!   black EFB clear are host presentation boundaries; only their ordering

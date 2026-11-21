@@ -3,7 +3,7 @@
 //! The implementation ports the highest-value PC fixNES contracts without
 //! calling the C emulator: iNES validation and mapper-0 PRG mapping, the
 //! reset-vector/6502 instruction and PPU-NMI path needed by synthetic fixtures, the
-//! controller shift register, a frame-sampled mapper-0 PPU picture, NTSC
+//! controller shift register with fixNES open-bus behavior, a frame-sampled mapper-0 PPU picture, NTSC
 //! frame timing, and the fixed 32 kHz/60 audio handoff size. Full mapper and
 //! APU waveform behavior, plus exact mid-scanline PPU timing, remain typed
 //! gaps in [`CoreGap`].
@@ -30,6 +30,10 @@ pub const OUTPUT_AUDIO_RATE: u32 = 32_000;
 pub const AUDIO_FRAMES_PER_VIDEO_FRAME: usize = (OUTPUT_AUDIO_RATE / 60) as usize;
 /// Interleaved stereo sample count in one output handoff.
 pub const AUDIO_SAMPLES_PER_VIDEO_FRAME: usize = AUDIO_FRAMES_PER_VIDEO_FRAME * 2;
+/// OAM DMA length when the `$4014` write ends on an even CPU cycle.
+pub const OAM_DMA_EVEN_CYCLES: u32 = 513;
+/// OAM DMA length when the `$4014` write ends on an odd CPU cycle.
+pub const OAM_DMA_ODD_CYCLES: u32 = 514;
 
 /// Why a provided ROM cannot be loaded by this candidate.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -228,9 +232,9 @@ pub enum CoreGap {
     UnsupportedCpuOpcodes,
     /// Only mapper 0 is implemented by this native core.
     UnsupportedMappers,
-    /// `$4014` copies OAM immediately, but the 513/514 CPU-cycle DMA stall is
-    /// not included in the native instruction-cycle total.
-    OamDmaCycleStealing,
+    /// OAM DMA copies the page and charges the total stall, but does not yet
+    /// expose fixNES's per-cycle CPU read/PPU-dot interleaving.
+    OamDmaTiming,
 }
 
 /// Exact fixNES C symbols and behaviors still outside this candidate.
@@ -244,11 +248,11 @@ pub const NOT_PORTED: &[&str] = &[
     "apuCycle / apuUpdate / apuGetBuf / apuGetBufSize (pc/lib/fixnes/apu.c)",
     "apuSetReg00..apuSetReg17 channel sequencing and waveform synthesis",
     "apuGetReg15 channel/DMC IRQ status (pc/lib/fixnes/apu.c)",
-    "cpuDoDMA / cpuDMATryHalt / cpuTryTakeover (pc/lib/fixnes/cpu.c)",
+    "cpuDoDMA / cpuDMATryHalt / cpuTryTakeover DMC path (pc/lib/fixnes/cpu.c)",
     "cpuSoftReset / ppuSoftReset / ppuReset soft-reset request sequencing",
-    "cpuDoOAM_DMA 513/514-cycle stall (pc/lib/fixnes/cpu.c)",
     "cpuKIL, cpuSLO, cpuRLA, cpuSRE, cpuRRA, cpuDCP, cpuISC and other unofficial opcode handlers",
     "ppuCycle / ppuDrawDone scanline rendering and mapper-cycle timing (pc/lib/fixnes/ppu.c)",
+    "cpuDoOAM_DMA per-cycle read/write/PPU-dot interleaving (pc/lib/fixnes/cpu.c)",
     "inputGetP2 open-bus read behavior (pc/lib/fixnes/input.c)",
     "pc_fixnes_render_frame / fixnes_capture_audio host conversion and DMA (pc/src/pc_nes_fixnes.c)",
 ];
@@ -352,6 +356,8 @@ pub struct CoreFrame {
     pub frame_number: u64,
     /// CPU cycles consumed to cross one NTSC PPU frame boundary.
     pub cpu_cycles: u32,
+    /// CPU cycles spent in `$4014` OAM DMA stalls during this frame.
+    pub oam_dma_cycles: u32,
     /// Audio handoff captured before the cadence reset.
     pub audio: AudioFrame,
     /// Indexed 256x240 picture produced at the frame boundary.
@@ -393,6 +399,8 @@ struct Bus {
     ppu: Ppu,
     apu_registers: [u8; 0x18],
     controller: Controller,
+    open_bus: u8,
+    oam_dma_pending: bool,
 }
 
 impl Bus {
@@ -411,18 +419,22 @@ impl Bus {
             ppu: Ppu::new(rom.chr(), rom.has_chr_ram(), mirroring),
             apu_registers: [0; 0x18],
             controller: Controller::new(),
+            open_bus: 0,
+            oam_dma_pending: false,
         }
     }
 
     fn read(&mut self, address: u16) -> u8 {
-        match address {
+        let value = match address {
             0x0000..=0x1fff => self.ram[usize::from(address) & 0x07ff],
             0x2000..=0x3fff => self.ppu.read_register(address),
             // No APU channel length counters or DMC state are modeled, so
             // the status shape for this subset is zero.  This is a status
             // read, not an echo of the last $4015 write.
             0x4015 => 0,
-            0x4016 => self.controller.read(),
+            // fixNES inputGetP1 returns the controller bit over the previous
+            // bus value's upper bits: (memLastVal & ~0x1f) | (ret & 1).
+            0x4016 => (self.open_bus & !0x1f) | (self.controller.read() & 1),
             0x4017 => 0,
             0x6000..=0x7fff => self
                 .prg_ram
@@ -434,7 +446,9 @@ impl Bus {
                 self.prg[offset]
             }
             _ => 0,
-        }
+        };
+        self.open_bus = value;
+        value
     }
 
     fn write(&mut self, address: u16, value: u8) {
@@ -455,6 +469,9 @@ impl Bus {
             0x8000..=0xffff => {}
             _ => {}
         }
+        // memSet8 updates fixNES's memLastVal after the device write, including
+        // a $4016 strobe or a $4014 DMA request.
+        self.open_bus = value;
     }
 
     fn oam_dma(&mut self, page: u8) {
@@ -463,6 +480,11 @@ impl Bus {
             let value = self.read(base | u16::from(offset));
             self.ppu.write_register(0x2004, value);
         }
+        self.oam_dma_pending = true;
+    }
+
+    fn take_oam_dma(&mut self) -> bool {
+        core::mem::take(&mut self.oam_dma_pending)
     }
 
     fn read_u16(&mut self, address: u16) -> u16 {
@@ -1079,6 +1101,7 @@ pub struct NesCore {
     cpu: Cpu,
     ppu_dots: u32,
     frame_number: u64,
+    cpu_odd_cycle: bool,
 }
 
 impl NesCore {
@@ -1092,6 +1115,7 @@ impl NesCore {
             cpu,
             ppu_dots: 0,
             frame_number: 0,
+            cpu_odd_cycle: false,
         }
     }
 
@@ -1183,7 +1207,7 @@ impl NesCore {
             CoreGap::DmcDma,
             CoreGap::UnsupportedCpuOpcodes,
             CoreGap::UnsupportedMappers,
-            CoreGap::OamDmaCycleStealing,
+            CoreGap::OamDmaTiming,
         ]
     }
 
@@ -1191,16 +1215,32 @@ impl NesCore {
     pub fn frame(&mut self) -> Result<CoreFrame, CoreError> {
         let target = NTSC_DOTS_PER_LINE * NTSC_LINES_PER_FRAME;
         let mut cpu_cycles = 0;
+        let mut oam_dma_cycles = 0;
         while self.ppu_dots < target {
-            let cycles = if self.bus.ppu.poll_nmi() {
+            let mut cycles = if self.bus.ppu.poll_nmi() {
                 u32::from(self.cpu.service_nmi(&mut self.bus))
             } else {
                 u32::from(self.cpu.step(&mut self.bus)?)
             };
-            cpu_cycles += cycles;
+            self.cpu_odd_cycle ^= cycles & 1 != 0;
             let ppu_dots = cycles * 3;
             self.ppu_dots = self.ppu_dots.saturating_add(ppu_dots);
             self.bus.ppu.add_dots(ppu_dots);
+
+            if self.bus.take_oam_dma() {
+                let dma_cycles = if self.cpu_odd_cycle {
+                    OAM_DMA_ODD_CYCLES
+                } else {
+                    OAM_DMA_EVEN_CYCLES
+                };
+                self.cpu_odd_cycle ^= dma_cycles & 1 != 0;
+                cycles += dma_cycles;
+                oam_dma_cycles += dma_cycles;
+                let dma_dots = dma_cycles * 3;
+                self.ppu_dots = self.ppu_dots.saturating_add(dma_dots);
+                self.bus.ppu.add_dots(dma_dots);
+            }
+            cpu_cycles += cycles;
         }
         self.ppu_dots %= target;
         self.frame_number += 1;
@@ -1208,6 +1248,7 @@ impl NesCore {
         Ok(CoreFrame {
             frame_number: self.frame_number,
             cpu_cycles,
+            oam_dma_cycles,
             audio: AudioFrame::silent(),
             picture,
         })

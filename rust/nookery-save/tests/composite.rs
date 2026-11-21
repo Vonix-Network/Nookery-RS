@@ -7,11 +7,12 @@ use std::path::PathBuf;
 
 use nookery_save::composite::{
     KEEP_DIARY_SIZE, KEEP_MAIL_SIZE, KEEP_ORIGINAL_SIZE, KEEP_ORIGINAL_TRAILER_OFFSET, MAIL_SIZE,
-    SwapDirection, swap_keep_diary, swap_keep_mail, swap_keep_original,
+    SAVE_PRIVATE_OFFSET, SwapDirection, swap_keep_diary, swap_keep_mail, swap_keep_original,
+    swap_save_t_legacy, swap_save_t_verified,
 };
 use nookery_save::{
-    GciError, SaveResult, read_town_record_from_slots, read_town_record_recovering,
-    write_town_record,
+    GciError, SaveResult, decode_gci_composite, encode_gci_composite, read_town_record_from_slots,
+    read_town_record_recovering, write_town_record,
 };
 use support::{Options, SaveSpec};
 
@@ -35,6 +36,209 @@ fn keep_mail_round_trip_preserves_synthetic_persisted_bytes() {
     swap_keep_mail(&mut bytes, SwapDirection::ToBigEndian).expect("synthetic keep-mail LE");
     assert_eq!(bytes, original);
     assert_eq!(MAIL_SIZE, 0x12A);
+}
+
+#[test]
+fn full_save_walker_hits_source_anchored_families_and_round_trips() {
+    let mut bytes = vec![0u8; nookery_save::SAVE_SIZE];
+    let be16 = |at: usize, value: u16, data: &mut [u8]| {
+        data[at..at + 2].copy_from_slice(&value.to_be_bytes());
+    };
+    let be32 = |at: usize, value: u32, data: &mut [u8]| {
+        data[at..at + 4].copy_from_slice(&value.to_be_bytes());
+    };
+
+    be16(0x10, 0x1234, &mut bytes); // save-check player-independent time year
+    be32(0x14, 0x0102_0304, &mut bytes); // scene_no
+    be16(0x1A, 0xA1B2, &mut bytes); // copy protection
+    be16(SAVE_PRIVATE_OFFSET + 0x10, 0x3344, &mut bytes);
+    be16(SAVE_PRIVATE_OFFSET + 0x94 + 0x08, 0x5566, &mut bytes);
+    be16(0x912A, 0x3001, &mut bytes);
+    be16(0x9CE8 + 0x10, 0x7788, &mut bytes);
+    be16(0x137A8, 0x99AA, &mut bytes);
+    be16(0x173A8, 0xC123, &mut bytes);
+    be16(0x17438, 0xBEEF, &mut bytes);
+    be16(0x20340 + 0xCE, 0xCAFE, &mut bytes);
+    be16(0x20694 + 8 + 0x2C, 0xD00D, &mut bytes);
+    be16(0x20498 + 6, 0x1357, &mut bytes);
+    be16(0x20498 + 0x50 + 0x10, 0x2468, &mut bytes);
+    be16(0x20554 + 4, 0x369C, &mut bytes);
+    be16(0x22540 + 0x12, 0x3002, &mut bytes);
+    be16(0x23E68 + 0x10, 0xABCD, &mut bytes);
+    be32(0x23E68 + 0x1C, 0x1020_3040, &mut bytes);
+    be16(0x23F20 + 0x229, 0x5678, &mut bytes);
+    be16(0x2416C, 0x4567, &mut bytes);
+    be32(0x24180, 0x5060_7080, &mut bytes);
+    let original = bytes.clone();
+
+    swap_save_t_verified(&mut bytes, SwapDirection::FromBigEndian).expect("full source walker");
+    assert_eq!(&bytes[0x14..0x18], &0x0102_0304u32.to_le_bytes());
+    assert_eq!(
+        &bytes[0x9CE8 + 0x10..0x9CE8 + 0x12],
+        &0x7788u16.to_le_bytes()
+    );
+    assert_eq!(
+        &bytes[0x20340 + 0xCE..0x20340 + 0xD0],
+        &0xCAFEu16.to_le_bytes()
+    );
+    assert_eq!(
+        &bytes[0x20694 + 8 + 0x2C..0x20694 + 8 + 0x2E],
+        &0xD00Du16.to_le_bytes()
+    );
+    assert_eq!(
+        &bytes[0x23E68 + 0x1C..0x23E68 + 0x20],
+        &0x1020_3040u32.to_le_bytes()
+    );
+    assert_eq!(
+        &bytes[0x23F20 + 0x229..0x23F20 + 0x22B],
+        &0x5678u16.to_le_bytes()
+    );
+    swap_save_t_verified(&mut bytes, SwapDirection::ToBigEndian).expect("full source restore");
+    assert_eq!(bytes, original);
+}
+
+#[test]
+fn legacy_save_walker_uses_legacy_union_and_post_office_order() {
+    let errand_id = SAVE_PRIVATE_OFFSET + 0x2EC + 0x2C;
+    let post_flags = 0x20694 + 0x830;
+    let mut legacy = vec![0u8; nookery_save::SAVE_SIZE];
+    legacy[errand_id..errand_id + 2].copy_from_slice(&0x1234u16.to_be_bytes());
+    legacy[post_flags..post_flags + 4].copy_from_slice(&0x1122_3344u32.to_be_bytes());
+    swap_save_t_legacy(&mut legacy, SwapDirection::FromBigEndian).expect("legacy decode");
+    assert_eq!(&legacy[errand_id..errand_id + 2], &0x1234u16.to_le_bytes());
+    assert_eq!(
+        &legacy[post_flags..post_flags + 4],
+        &0x1122_3344u32.to_le_bytes()
+    );
+}
+
+#[test]
+fn quest_deadline_relocation_matches_c_pre_swap_guard() {
+    let base = SAVE_PRIVATE_OFFSET + 0x94;
+    let mut bytes = vec![0u8; nookery_save::SAVE_SIZE];
+    // Invalid bytes at the old base location, followed by a valid BE RTC at
+    // the location used by the historical PC layout.
+    bytes[base + 2..base + 10].copy_from_slice(&[0xFF, 0, 0, 0, 0, 0, 0, 0]);
+    bytes[base + 4..base + 12].copy_from_slice(&[0, 0, 12, 3, 1, 1, 0x07, 0xD5]);
+    nookery_save::relocate_quest_time_limits(&mut bytes).expect("relocate quest deadline");
+    assert_eq!(
+        &bytes[base + 2..base + 10],
+        &[0, 0, 12, 3, 1, 1, 0x07, 0xD5]
+    );
+    assert_eq!(&bytes[base + 10..base + 12], &[0, 0]);
+}
+
+#[test]
+fn decoded_composite_swaps_source_offsets_and_restores_persisted_bytes() {
+    let mut persisted = support::valid_record();
+    let save = nookery_save::HEADER_SIZE + nookery_save::SAVE_MAIN_OFFSET;
+    let delivery = save + 0x20 + 0x94;
+    persisted[delivery..delivery + 2].copy_from_slice(&0xA501u16.to_be_bytes());
+    persisted[delivery + 0x08..delivery + 0x0A].copy_from_slice(&0x1234u16.to_be_bytes());
+    persisted[delivery + 0x0C..delivery + 0x0E].copy_from_slice(&0x5678u16.to_be_bytes());
+    let mut save_block = persisted[save..save + nookery_save::SAVE_SIZE].to_vec();
+    support::seal_at(&mut save_block, support::SAVE_CHECKSUM_OFFSET);
+    persisted[save..save + nookery_save::SAVE_SIZE].copy_from_slice(&save_block);
+
+    let mut decoded = persisted.clone();
+    let selection = decode_gci_composite(&mut decoded).expect("valid GCI composite");
+
+    assert_eq!(selection.save_copy, 0);
+    assert!(!selection.aux.legacy_order);
+    assert_eq!(&decoded[save..save + 4], &6i32.to_le_bytes());
+    assert_eq!(
+        &decoded[delivery + 0x08..delivery + 0x0A],
+        &0x1234u16.to_le_bytes()
+    );
+    assert_eq!(
+        &decoded[delivery + 0x0C..delivery + 0x0E],
+        &0x5678u16.to_le_bytes()
+    );
+    let mail = nookery_save::HEADER_SIZE + support::aux_modern().mail;
+    assert_eq!(
+        &decoded[mail + 2..mail + 4],
+        &support::LAND_ID.to_le_bytes()
+    );
+
+    encode_gci_composite(&mut decoded, selection).expect("restore card representation");
+    assert_eq!(decoded, persisted);
+}
+
+#[test]
+fn composite_selects_backup_and_legacy_aram_order() {
+    let mut backup = support::build(Options {
+        main: SaveSpec::Corrupt,
+        backup: SaveSpec::Valid { version: 5 },
+        ..Options::default()
+    });
+    let selection = decode_gci_composite(&mut backup).expect("backup fallback");
+    assert_eq!(selection.save_copy, 1);
+    encode_gci_composite(&mut backup, selection).expect("restore backup fixture");
+
+    let persisted = support::build(Options {
+        aux: support::AuxOrder::Legacy,
+        ..Options::default()
+    });
+    let mut decoded = persisted.clone();
+    let selection = decode_gci_composite(&mut decoded).expect("legacy auxiliary order");
+    assert!(selection.aux.legacy_order);
+    encode_gci_composite(&mut decoded, selection).expect("restore legacy fixture");
+    assert_eq!(decoded, persisted);
+}
+
+#[test]
+fn composite_failures_are_non_mutating_and_replay_restores_exact_candidate() {
+    let mut truncated = support::valid_record();
+    truncated.truncate(nookery_save::RECORD_SIZE - 1);
+    let before = truncated.clone();
+    assert!(matches!(
+        decode_gci_composite(&mut truncated),
+        Err(GciError::TruncatedPayload { .. })
+    ));
+    assert_eq!(truncated, before);
+
+    let mut wrong_checksum = support::valid_record();
+    let mutation = nookery_save::HEADER_SIZE + support::aux_modern().original + 0x40;
+    wrong_checksum[mutation] ^= 0x01;
+    let mutated = wrong_checksum.clone();
+    assert_eq!(
+        decode_gci_composite(&mut wrong_checksum),
+        Err(GciError::BadAuxChecksums)
+    );
+    assert_eq!(wrong_checksum, mutated);
+
+    // Mutation replay: restore exactly the changed byte, then the same
+    // candidate loads and can be restored to its persisted bytes.
+    wrong_checksum[mutation] ^= 0x01;
+    let selection = decode_gci_composite(&mut wrong_checksum).expect("restored candidate");
+    encode_gci_composite(&mut wrong_checksum, selection).expect("restored candidate round-trip");
+    assert_eq!(wrong_checksum, support::valid_record());
+}
+
+#[test]
+fn composite_rejects_wrong_save_checksum_and_directory_size() {
+    let mut bad_save = support::valid_record();
+    let save_checksum =
+        nookery_save::HEADER_SIZE + nookery_save::SAVE_MAIN_OFFSET + support::SAVE_CHECKSUM_OFFSET;
+    bad_save[save_checksum] ^= 0x01;
+    let before = bad_save.clone();
+    assert_eq!(
+        decode_gci_composite(&mut bad_save),
+        Err(GciError::NoValidSaveCopy)
+    );
+    assert_eq!(bad_save, before);
+
+    let mut bad_size = support::build(Options {
+        block_count: nookery_save::TOWN_BLOCK_COUNT - 1,
+        ..Options::default()
+    });
+    assert_eq!(
+        decode_gci_composite(&mut bad_size),
+        Err(GciError::BadBlockCount {
+            found: nookery_save::TOWN_BLOCK_COUNT - 1,
+            expected: nookery_save::TOWN_BLOCK_COUNT,
+        })
+    );
 }
 
 #[test]
