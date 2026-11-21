@@ -65,6 +65,54 @@ fn synthetic_vector_has_deterministic_cpu_frame_and_audio_counts() {
 }
 
 #[test]
+fn official_cpu_addressing_stack_rmw_and_register_boundaries_run_end_to_end() {
+    let mut program = vec![
+        0xa2, 0x03, // LDX #3
+        0xca, // DEX
+        0xd0, 0xfd, // BNE $8002
+        0x8e, 0x00, 0x20, // STX $2000: PPU register boundary
+        0xa9, 0x5a, 0x8d, 0x00, 0x40, // LDA #$5a; STA $4000: APU boundary
+        0xa9, 0x00, 0x85, 0x20, // Set ($20),Y pointer low
+        0xa9, 0x00, 0x85, 0x21, // Set ($20),Y pointer high
+        0xa2, 0x00, // LDX #0
+        0xa9, 0x42, 0x81, 0x20, // STA ($20,X)
+        0xa0, 0x01, 0xa9, 0x33, 0x91, 0x20, // LDY #1; STA ($20),Y
+        0xa9, 0x01, 0x8d, 0x16, 0x40, // Strobe controller high
+        0xa9, 0x00, 0x8d, 0x16, 0x40, // Then latch it low
+        0xad, 0x16, 0x40, 0x85, 0x10, // Read A and retain it
+        0x20, 0x60, 0x80, // JSR $8060
+        0xa9, 0x70, 0x85, 0x30, 0xa9, 0x80, 0x85, 0x31, // JMP ($0030)
+        0x6c, 0x30, 0x00,
+    ];
+    program.resize(0x60, 0xea);
+    program.extend([
+        0xa9, 0x7f, 0x85, 0x11, // LDA #$7f; STA $11
+        0x06, 0x11, // ASL $11 -> $fe
+        0xe6, 0x11, // INC $11 -> $ff
+        0xa5, 0x11, // LDA $11
+        0x48, 0xa9, 0x01, 0x68, 0x85, 0x12, // PHA; LDA #1; PLA; STA $12
+        0x60, // RTS
+    ]);
+    program.resize(0x70, 0xea);
+    program.extend([0xa9, 0x99, 0x85, 0x13, 0x4c, 0x70, 0x80]);
+
+    let image = RomImage::parse(fixture_rom(&program)).expect("fixture");
+    let mut core = NesCore::new(&image);
+    core.set_input(0x01);
+    core.frame()
+        .expect("all official instructions are supported");
+
+    assert_eq!(core.ram()[0x00], 0x42, "indexed-indirect store");
+    assert_eq!(core.ram()[0x01], 0x33, "indirect-indexed store");
+    assert_eq!(core.ram()[0x10], 1, "controller shift register read");
+    assert_eq!(core.ram()[0x11], 0xff, "zero-page read-modify-write");
+    assert_eq!(core.ram()[0x12], 0xff, "stack push/pop and PLA");
+    assert_eq!(core.ram()[0x13], 0x99, "JMP indirect target");
+    assert_eq!(core.ppu_register(0), Some(0), "PPU bus write");
+    assert_eq!(core.apu_register(0), Some(0x5a), "APU bus write");
+}
+
+#[test]
 fn unsupported_cpu_opcode_is_a_typed_gap() {
     let image = RomImage::parse(fixture_rom(&[0x02])).expect("fixture");
     let mut core = NesCore::new(&image);
