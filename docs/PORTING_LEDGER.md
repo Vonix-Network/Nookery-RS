@@ -48,7 +48,7 @@ Highest-risk-for-correctness slice: user saves must round-trip.
 |---|---|
 | **Target** | `rust/nookery-save` + primitive `rust/nookery-bswap` first; `pc/src/pc_gci.c`, `pc/src/pc_save_bswap.c`, `pc/include/pc_gci.h`, `pc_save_bswap.h` remain the oracle |
 | **Slices** | (a) GCI header (`CARDDir`, 0x2000 blocks, rotation suffixes); (b) five typed `#[repr(C)]` LE↔BE leaf mirrors; (c) Mail name/header/content swaps; (d) composite `Save_t`/ARAM LE↔BE swap; (e) card A/B directory resolution |
-| **Gate — current candidate** | GCI directory/record/checksum validation, primitive endian/bitfield repackers, five typed save-byte-swap leaf mirrors, Mail swaps, bounded composite `Save_t`/keep-mail walkers, recovery/rotation precedence, and staged synthetic writes pass 59 save tests; full remaining `Save_t`/quest/ARAM/card-manager parity is still open. |
+| **Gate — current candidate** | GCI directory/record/checksum validation, primitive endian/bitfield repackers, five typed save-byte-swap leaf mirrors, Mail swaps, bounded composite `Save_t`/keep-mail walkers, recovery/rotation precedence, staged synthetic writes, and the PC card-manager layer (save-path resolution, town and Card-B visitor-town scanning/selection, ARAM block staging, reset codes, pre-write side effects, legacy migration, write gating) pass 65 save tests; full `Save_t` construction/byte swapping in `pc_gci_write`, the game-global travel lifecycle (`mCD_InitGameStart_bg`, `mCD_SaveStation_NextLand_bg`, `mCD_toNextLand`), and runtime-only cleanup/time calls remain open. |
 | **Gate — round-trip** | For N real `.gci` files (user-supplied, never committed): C reads → Rust byteswaps → C reads must produce identical `Save_t`; and Rust write → C read → Rust read is stable. Any byte diff fails |
 | **Gate — failure modes** | `pc_save_result` states `PC_SAVE_MISSING` / `PC_SAVE_INVALID` / `PC_SAVE_IO_ERROR` reproduced for truncated, wrong-hash, and unreadable files |
 | **Gate — regression** | Existing C save path still loads a previously saved village (the C oracle is unchanged) |
@@ -62,7 +62,7 @@ Frozen on-disk and in-memory contracts.
 |---|---|
 | **Target** | `rust/nookery-config` and bounded `rust/nookery-input` first; `pc/src/acgc_settings.cpp`, `pc/include/pc_settings.h`, `pc/src/acgc_input_profiles.cpp`, `src/padmgr.c` remain the oracle |
 | **Slices** | (a) `PCSettings` field order + `config.json` codec keys; (b) keyboard/gamepad default maps; (c) direction editing, conflict validation, and legacy migration; (d) live deadzone/PADStatus math |
-| **Gate — current candidate** | Scalar defaults/ranges, Borealis-style constraints, legacy INI import, JSON migration, exact input defaults, direction editing, conflict validation, SDL-name translation, controller ports, PAD masks, deadzone/threshold math, hotplug, snapshot bounds, and malformed-input handling pass 23 config plus 45 input tests. Real-install round-trip, live SDL/Aurora/PADStatus behavior, and C ABI parity are not yet proven. |
+| **Gate — current candidate** | Scalar defaults/ranges, Borealis-style constraints, legacy INI import, JSON migration, exact input defaults, direction editing, conflict validation, SDL-name translation, controller ports, PAD masks, deadzone/threshold math, hotplug, snapshot bounds, and malformed-input handling pass 27 config plus 45 input tests; the published `#[repr(C)] PCSettings` ABI is offset/size/alignment-identical to `pc_settings.h` and coexists with it in one translation unit, with a 70-check C harness. Real-install round-trip, live SDL/Aurora/PADStatus behavior, and C++ consumer migration are not yet proven. |
 | **Gate — config** | Round-trip an existing `config.json` and `settings.ini` from a real install: every key and value preserved; unknown keys retained, not dropped |
 | **Gate — input** | Same controller input sequence yields identical `PADStatus` bytes from C and Rust across the deadzone boundary (0, at-threshold, above-threshold) |
 | **Gate — platform** | Touch-control layouts on Android/iOS still render and the layout editor still saves |
@@ -90,7 +90,7 @@ Third-party emulator; integrate, do not rewrite.
 |---|---|
 | **Target** | `rust/nookery-famicom` host seam first; `pc/src/pc_nes_fixnes.c`, `src/famicom_emu.c`, `src/static/Famicom/` remain the oracle |
 | **Slices** | (a) frame-buffer contract (256×240 RGB565); (b) AI DMA audio cadence; (c) save-header (`0x40`) and internal-ROM table |
-| **Gate — current candidate** | ROM catalog, exact exit combos/countdown, frame-action ordering, PC arena/cleanup contract, mapper-0 iNES validation, expanded official 6502 opcode/addressing subset with stack/control-flow/RMW/page-crossing/indirect-JMP behavior, controller shift behavior, CPU-path PPU/APU register boundaries, audio cadence, and runtime cleanup pass 64 Famicom tests; remaining opcodes, mappers, full emulator/fixNES parity, and application activation remain open. |
+| **Gate — current candidate** | ROM catalog, exact exit combos/countdown, frame-action ordering, PC arena/cleanup contract, mapper-0 iNES validation, expanded official 6502 opcode/addressing subset with stack/control-flow/RMW/page-crossing/indirect-JMP behavior, controller shift behavior, CPU-path PPU/APU register boundaries, audio cadence, PPU register/memory and background+sprite rendering, and runtime cleanup pass 68 Famicom tests; remaining opcodes, mappers, full emulator/fixNES parity, and application activation remain open. |
 | **Gate — visual** | A known NES ROM renders an identical frame hash (per-frame CRC over the RGB565 buffer) as the C path for a fixed input script |
 | **Gate — audio** | Sample sequence bit-identical for the same script; no underruns introduced |
 | **Constraint** | fixNES is MIT (FIX94) — keep `pc/lib/fixnes/LICENSE` and attribution; do not vendor a different emulator |
@@ -101,7 +101,7 @@ Third-party emulator; integrate, do not rewrite.
 |---|---|
 | **Target** | `pc/src/acgc_disc.cpp`, `pc/src/acgc_texture_replacements.cpp`, asset pipeline; bounded seams in `rust/nookery-disc` and `rust/nookery-texture` |
 | **Slices** | (a) accepted-disc catalog + xxh3-128 check; (b) exact texture-pack primary/cwd/base-relative path selection; (c) HD texture pack indexing |
-| **Gate — current candidate** | Rust catalog/header/hash classification, bounded RVZ/CISO metadata inspection, raw ISO/GCM stream verification, and bounded read/error behavior pass 52 disc tests; texture path precedence, non-directory handling, and deterministic PNG/DDS indexing pass 10 texture tests; no successful Aurora RVZ/ISO/CISO/GCM decode, texture registration, or user-path launch is claimed. |
+| **Gate — current candidate** | Rust catalog/header/hash classification, bounded RVZ/CISO metadata inspection, raw ISO/GCM stream verification, and bounded read/error behavior pass 60 disc tests; texture path precedence, non-directory handling, and deterministic PNG/DDS indexing pass 10 texture tests; no successful Aurora RVZ/ISO/CISO/GCM decode, texture registration, or user-path launch is claimed. |
 | **Gate** | All four image formats (RVZ, ISO, CISO, GCM) accepted; wrong-hash disc rejected with the same error; texture replacement for a known pack resolves identically |
 | **Constraint** | Never ship a disc image or extracted assets; tests use user-supplied input or a synthetic hash fixture |
 
@@ -155,10 +155,10 @@ An optimization is accepted only with a row here showing the metric, the before/
 |---|---|---|
 | 0 | Baseline pin + crate tests | **Partial — host CMake gate blocked** |
 | 1 | Data-folder C ABI + parity harness | **Candidate — ABI + Rust/C harness pass; C++ parity and CMake linkage unproven** |
-| 2 | Save/GCI + byteswap | **Candidate — GCI validator + primitive bswap + typed leaf/Mail + bounded composite/recovery/write slices; remaining `Save_t`/quest/ARAM/card-manager parity open** |
-| 3 | Settings + input | **Candidate — settings model + bounded profile/legacy/controller/PAD runtime slice; live SDL/PADStatus wiring and C parity open** |
+| 2 | Save/GCI + byteswap | **Candidate — GCI validator + primitive bswap + typed leaf/Mail + composite/recovery/write slices + PC card-manager layer (paths, town/Card-B selection, ARAM staging, reset codes, legacy migration); `pc_gci_write` Save_t construction and game-global travel lifecycle open** |
+| 3 | Settings + input | **Candidate — settings model + `#[repr(C)]` PCSettings ABI with oracle-identical layout and `config.json` codec (70-check C harness) + profile/legacy/controller/PAD runtime slice; live SDL/PADStatus wiring and C++ consumer migration open** |
 | 4 | Allocator / arenas | **Candidate — bounded model + fixed-seed C parity; runtime ABI and workload gates not started** |
-| 5 | Famicom boundary | **Candidate — host seam plus bounded native mapper-0 runtime with expanded official 6502 opcode/addressing, stack/control-flow, RMW, page-crossing, and indirect-JMP behavior; full emulator/fixNES, visual/audio parity, and application activation remain open** |
+| 5 | Famicom boundary | **Candidate — host seam plus native mapper-0 runtime with official 6502 opcode/addressing, stack/control-flow, RMW, page-crossing, indirect-JMP behavior, and PPU register/memory plus background+sprite rendering; iNES clamp parity, PRG RAM/`$4014` DMA, APU, NMI/IRQ timing, fixNES dot-cadence parity, and application activation remain open** |
 | 6 | Disc + content | **Candidate — catalog/header/hash + bounded RVZ/CISO/raw stream verification + texture path/index seams; Aurora format decoding, texture runtime, and user path open** |
 | 7 | UI + platform services | Not started |
 | 8 | Boot + integration | Not started |
