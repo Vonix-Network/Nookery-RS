@@ -119,31 +119,37 @@ impl RomImage {
             return Err(RomError::MissingTrainer);
         }
 
-        let available = bytes.len().saturating_sub(data_offset);
+        // Keep this arithmetic aligned with pc_nes_fixnes.c: ROMsize starts
+        // after the header, so trainer bytes remain part of the clamp pool.
+        // The pointer into the payload skips the trainer separately below.
+        let mut rom_size = bytes.len() - INES_HEADER_BYTES;
         let declared_prg_len = usize::from(bytes[4]) * PRG_BANK_BYTES;
         let declared_chr_len = usize::from(bytes[5]) * CHR_BANK_BYTES;
-        let (prg_len, chr_len) = if declared_prg_len == 0 {
+        let mut prg_len = declared_prg_len.min(rom_size);
+        rom_size -= prg_len;
+        let mut chr_len = declared_chr_len;
+        if prg_len == 0 {
             // Match pc_fixnes_init: a zero-PRG header treats all remaining
             // bytes as PRG and discards the declared CHR surface.
-            if available == 0 {
-                return Err(RomError::TruncatedData {
-                    offset: data_offset,
-                    required: 1,
-                    available,
-                });
-            }
-            (available, 0)
+            prg_len = rom_size;
         } else {
-            let declared = declared_prg_len + declared_chr_len;
-            if declared > available {
-                return Err(RomError::TruncatedData {
-                    offset: data_offset,
-                    required: declared,
-                    available,
-                });
-            }
-            (declared_prg_len, declared_chr_len)
-        };
+            chr_len = chr_len.min(rom_size);
+        }
+
+        // fixNES advances the PRG pointer past the trainer after calculating
+        // ROMsize.  Bound the resulting lengths against that actual payload
+        // so malformed-but-clamped inputs cannot create an out-of-bounds
+        // slice.  A zero-length PRG remains a typed parse error.
+        let available = bytes.len().saturating_sub(data_offset);
+        prg_len = prg_len.min(available);
+        if prg_len == 0 {
+            return Err(RomError::TruncatedData {
+                offset: data_offset,
+                required: 1,
+                available,
+            });
+        }
+        chr_len = chr_len.min(available - prg_len);
 
         let prg_ram_size = if bytes[8] == 0 {
             0x2000
@@ -210,10 +216,21 @@ impl RomImage {
 /// Typed surfaces that remain outside this candidate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CoreGap {
-    /// The PPU renderer is frame-sampled; exact mid-scanline timing is not ported.
+    /// The PPU renderer is frame-sampled; exact mid-scanline timing and NMI
+    /// sequencing are not ported.
     PpuRendering,
     /// The APU emits a correctly sized silent handoff, not channel waveforms.
     ApuWaveforms,
+    /// DMC sample DMA and its interaction with CPU bus ownership are not
+    /// modeled.
+    DmcDma,
+    /// Unofficial or otherwise unported 6502 opcodes return a typed error.
+    UnsupportedCpuOpcodes,
+    /// Only mapper 0 is implemented by this native core.
+    UnsupportedMappers,
+    /// `$4014` copies OAM immediately, but the 513/514 CPU-cycle DMA stall is
+    /// not included in the native instruction-cycle total.
+    OamDmaCycleStealing,
 }
 
 /// A deterministic core error after ROM validation.
@@ -352,6 +369,7 @@ impl AudioFrame {
 struct Bus {
     ram: [u8; CPU_RAM_BYTES],
     prg: Vec<u8>,
+    prg_ram: Vec<u8>,
     ppu: Ppu,
     apu_registers: [u8; 0x18],
     controller: Controller,
@@ -369,6 +387,7 @@ impl Bus {
         Self {
             ram: [0; CPU_RAM_BYTES],
             prg: rom.prg().to_vec(),
+            prg_ram: vec![0; rom.prg_ram_size()],
             ppu: Ppu::new(rom.chr(), rom.has_chr_ram(), mirroring),
             apu_registers: [0; 0x18],
             controller: Controller::new(),
@@ -379,10 +398,17 @@ impl Bus {
         match address {
             0x0000..=0x1fff => self.ram[usize::from(address) & 0x07ff],
             0x2000..=0x3fff => self.ppu.read_register(address),
-            0x4015 => self.apu_registers[0x15],
+            // No APU channel length counters or DMC state are modeled, so
+            // the status shape for this subset is zero.  This is a status
+            // read, not an echo of the last $4015 write.
+            0x4015 => 0,
             0x4016 => self.controller.read(),
             0x4017 => 0,
-            0x6000..=0x7fff => 0,
+            0x6000..=0x7fff => self
+                .prg_ram
+                .get((usize::from(address) - 0x6000) % self.prg_ram.len())
+                .copied()
+                .unwrap_or(0),
             0x8000..=0xffff => {
                 let offset = (usize::from(address) - 0x8000) % self.prg.len();
                 self.prg[offset]
@@ -395,16 +421,27 @@ impl Bus {
         match address {
             0x0000..=0x1fff => self.ram[usize::from(address) & 0x07ff] = value,
             0x2000..=0x3fff => self.ppu.write_register(address, value),
-            0x4000..=0x4017 => {
-                if address == 0x4016 {
-                    self.controller.write_strobe(value);
-                } else {
-                    self.apu_registers[usize::from(address - 0x4000)] = value;
+            0x4000..=0x4017 => match address {
+                0x4014 => self.oam_dma(value),
+                0x4016 => self.controller.write_strobe(value),
+                _ => self.apu_registers[usize::from(address - 0x4000)] = value,
+            },
+            0x6000..=0x7fff => {
+                let index = (usize::from(address) - 0x6000) % self.prg_ram.len();
+                if let Some(byte) = self.prg_ram.get_mut(index) {
+                    *byte = value;
                 }
             }
-            0x6000..=0x7fff => {}
             0x8000..=0xffff => {}
             _ => {}
+        }
+    }
+
+    fn oam_dma(&mut self, page: u8) {
+        let base = u16::from(page) << 8;
+        for offset in 0..=u8::MAX {
+            let value = self.read(base | u16::from(offset));
+            self.ppu.write_register(0x2004, value);
         }
     }
 
@@ -1040,6 +1077,12 @@ impl NesCore {
         &self.bus.ram
     }
 
+    /// Reads the mapper-0 PRG RAM backing store.
+    #[must_use]
+    pub fn prg_ram(&self) -> &[u8] {
+        &self.bus.prg_ram
+    }
+
     /// Reads one of the eight CPU-visible PPU register mirrors.
     ///
     /// Rendering, VRAM address latches, and status side effects remain an
@@ -1104,8 +1147,15 @@ impl NesCore {
 
     /// Reports the intentionally incomplete surfaces.
     #[must_use]
-    pub const fn gaps() -> [CoreGap; 2] {
-        [CoreGap::PpuRendering, CoreGap::ApuWaveforms]
+    pub const fn gaps() -> [CoreGap; 6] {
+        [
+            CoreGap::PpuRendering,
+            CoreGap::ApuWaveforms,
+            CoreGap::DmcDma,
+            CoreGap::UnsupportedCpuOpcodes,
+            CoreGap::UnsupportedMappers,
+            CoreGap::OamDmaCycleStealing,
+        ]
     }
 
     /// Advances until one NTSC PPU frame boundary, then captures audio.

@@ -155,6 +155,102 @@ fn zero_prg_with_chr_uses_remaining_bytes_as_prg_without_panicking() {
 }
 
 #[test]
+fn nonzero_prg_is_clamped_to_supplied_payload_before_chr() {
+    let mut rom = vec![0; 16 + 0x2000];
+    rom[..4].copy_from_slice(b"NES\x1a");
+    rom[4] = 2;
+    rom[5] = 1;
+    rom[16] = 0xa5;
+
+    let image = RomImage::parse(rom).expect("fixNES clamps oversized PRG");
+    assert_eq!(image.prg().len(), 0x2000);
+    assert!(image.chr().is_empty());
+}
+
+#[test]
+fn chr_is_clamped_after_a_fitting_prg() {
+    let mut rom = vec![0; 16 + 0x4000 + 0x1000];
+    rom[..4].copy_from_slice(b"NES\x1a");
+    rom[4] = 1;
+    rom[5] = 1;
+    rom[16 + 0x4000] = 0x5a;
+
+    let image = RomImage::parse(rom).expect("fixNES clamps oversized CHR");
+    assert_eq!(image.prg().len(), 0x4000);
+    assert_eq!(image.chr().len(), 0x1000);
+    assert_eq!(image.chr()[0], 0x5a);
+}
+
+#[test]
+fn trainer_is_skipped_while_zero_prg_uses_remaining_payload_safely() {
+    let mut rom = vec![0; 16 + 512 + 0x2000];
+    rom[..4].copy_from_slice(b"NES\x1a");
+    rom[4] = 0;
+    rom[5] = 1;
+    rom[6] = 0x04;
+    rom[16] = 0xee;
+    rom[16 + 512] = 0xa5;
+
+    let image = RomImage::parse(rom).expect("trainer and zero PRG are valid");
+    assert!(image.has_trainer());
+    assert_eq!(image.prg().len(), 0x2000);
+    assert_eq!(image.prg()[0], 0xa5, "trainer is not PRG data");
+    assert!(image.chr().is_empty());
+}
+
+#[test]
+fn clamping_to_empty_prg_is_a_typed_error() {
+    let mut rom = vec![0; 16];
+    rom[..4].copy_from_slice(b"NES\x1a");
+    rom[4] = 1;
+    assert_eq!(
+        RomImage::parse(rom),
+        Err(RomError::TruncatedData {
+            offset: 16,
+            required: 1,
+            available: 0,
+        })
+    );
+}
+
+#[test]
+fn mapper_zero_prg_ram_is_backed_and_4015_is_status_not_write_echo() {
+    let mut program = vec![
+        0xa9, 0x5a, 0x8d, 0x00, 0x60, // $6000 = $5a
+        0xad, 0x00, 0x60, 0x85, 0x20, // read it back
+        0xa9, 0x1f, 0x8d, 0x15, 0x40, // write APU enable bits
+        0xad, 0x15, 0x40, 0x85, 0x21, // status has no active channels
+        0x4c, 0x00, 0x80,
+    ];
+    program.resize(0x30, 0xea);
+    let mut rom = fixture_rom(&program);
+    rom[8] = 2;
+    let image = RomImage::parse(rom).expect("mapper-0 fixture");
+    assert_eq!(image.prg_ram_size(), 0x4000);
+    let mut core = NesCore::new(&image);
+    core.frame().expect("RAM/status fixture executes");
+    assert_eq!(core.prg_ram()[0], 0x5a);
+    assert_eq!(core.ram()[0x20], 0x5a);
+    assert_eq!(core.ram()[0x21], 0);
+}
+
+#[test]
+fn oam_dma_copies_a_cpu_page_through_ppu_oam() {
+    let program = [
+        0xa9, 0x00, 0x8d, 0x03, 0x20, // OAMADDR = 0
+        0xa9, 0xa5, 0x8d, 0x00, 0x02, // CPU page $02, byte 0 = $a5
+        0xa9, 0x02, 0x8d, 0x14, 0x40, // OAMDMA page $02
+        0x4c, 0x00, 0x80,
+    ];
+    let image = RomImage::parse(fixture_rom(&program)).expect("OAM DMA fixture");
+    let mut core = NesCore::new(&image);
+    core.frame().expect("OAM DMA executes");
+    assert_eq!(core.ppu_oam()[0], 0xa5);
+    assert_eq!(core.ppu_oam()[1], 0);
+    assert!(NesCore::gaps().contains(&nookery_famicom::core::CoreGap::OamDmaCycleStealing));
+}
+
+#[test]
 fn indirect_jmp_wraps_high_byte_within_page_during_execution() {
     let rom = fixture_with_reset(
         &[
@@ -323,4 +419,10 @@ fn controller_mapping_and_shift_order_match_fixnes_input() {
     controller.write_strobe(1);
     assert_eq!(controller.read(), 1);
     assert_eq!(controller.read(), 1);
+
+    let mut opposing_vertical = Controller::new();
+    opposing_vertical.set_buttons(0b0011_0011);
+    opposing_vertical.write_strobe(0);
+    let reads: Vec<u8> = (0..8).map(|_| opposing_vertical.read()).collect();
+    assert_eq!(reads, vec![1, 1, 0, 0, 1, 0, 0, 0]);
 }
