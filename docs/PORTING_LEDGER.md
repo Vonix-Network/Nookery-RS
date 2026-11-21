@@ -90,7 +90,7 @@ Third-party emulator; integrate, do not rewrite.
 |---|---|
 | **Target** | `rust/nookery-famicom` host seam first; `pc/src/pc_nes_fixnes.c`, `src/famicom_emu.c`, `src/static/Famicom/` remain the oracle |
 | **Slices** | (a) frame-buffer contract (256×240 RGB565); (b) AI DMA audio cadence; (c) save-header (`0x40`) and internal-ROM table |
-| **Gate — current candidate** | ROM catalog, exact exit combos/countdown, frame-action ordering, PC arena/cleanup contract, mapper-0 iNES validation, deterministic synthetic 6502 execution, controller shift behavior, audio cadence, and runtime cleanup pass 60 Famicom tests; full emulator/fixNES parity and application activation remain open. |
+| **Gate — current candidate** | ROM catalog, exact exit combos/countdown, frame-action ordering, PC arena/cleanup contract, mapper-0 iNES validation, expanded official 6502 opcode/addressing subset with stack/control-flow/RMW/page-crossing/indirect-JMP behavior, controller shift behavior, CPU-path PPU/APU register boundaries, audio cadence, and runtime cleanup pass 61 Famicom tests; remaining opcodes, mappers, full emulator/fixNES parity, and application activation remain open. |
 | **Gate — visual** | A known NES ROM renders an identical frame hash (per-frame CRC over the RGB565 buffer) as the C path for a fixed input script |
 | **Gate — audio** | Sample sequence bit-identical for the same script; no underruns introduced |
 | **Constraint** | fixNES is MIT (FIX94) — keep `pc/lib/fixnes/LICENSE` and attribution; do not vendor a different emulator |
@@ -158,7 +158,7 @@ An optimization is accepted only with a row here showing the metric, the before/
 | 2 | Save/GCI + byteswap | **Candidate — GCI validator + primitive bswap + typed leaf/Mail + bounded composite/recovery/write slices; remaining `Save_t`/quest/ARAM/card-manager parity open** |
 | 3 | Settings + input | **Candidate — settings model + bounded profile/legacy/controller/PAD runtime slice; live SDL/PADStatus wiring and C parity open** |
 | 4 | Allocator / arenas | **Candidate — bounded model + fixed-seed C parity; runtime ABI and workload gates not started** |
-| 5 | Famicom boundary | **Candidate — host seam plus bounded native mapper-0/synthetic-6502 runtime; full emulator/fixNES, visual/audio parity, and application activation remain open** |
+| 5 | Famicom boundary | **Candidate — host seam plus bounded native mapper-0 runtime with expanded official 6502 opcode/addressing, stack/control-flow, RMW, page-crossing, and indirect-JMP behavior; full emulator/fixNES, visual/audio parity, and application activation remain open** |
 | 6 | Disc + content | **Candidate — catalog/header/hash + bounded RVZ/CISO/raw stream verification + texture path/index seams; Aurora format decoding, texture runtime, and user path open** |
 | 7 | UI + platform services | Not started |
 | 8 | Boot + integration | Not started |

@@ -6,7 +6,7 @@ Owner directive: **finish the complete Rust port** and the separately tracked cl
 
 - Repository: `Vonix-Network/Nookery-RS`, upstream: `flyngmt/Nookery`.
 - Bootstrap ancestor: `03ff4a17f7f1fa1cc083b6e7c3a0ff21927bb15e`.
-- Current Rust workspace: 15 bounded crates, 132 tracked Rust-workspace files, 28,676 lines.
+- Current Rust workspace: 15 bounded crates, 132 tracked Rust-workspace files, 29,051 lines.
 - Remaining oracle surface: 5,885 tracked C/C++ header/source files, approximately 1,004,742 lines.
 - CMake application configure is currently blocked on this host by missing X11/Wayland development libraries; this remains an environment blocker, not a port completion claim.
 
@@ -45,10 +45,10 @@ The parent may add further disjoint game/data/UI lanes after the first cohort is
 
 ### Reconciled candidate
 
-- Famicom candidate source commit: `fb4f7a87cac5e19af2c73b4cf87d88a85553c151`, tree `5454d3bd1793a1b48aba7456f00105a04e10db3c`; owned-path hashes matched before integration.
-- Integrated code commit: `83549bc650b6937aac290f989a32f8a4a16ff0af`; documentation reconciliation commit: `5b6b4593cdfd0b3d58cef00f193c16efe0d4f439`.
-- Parent-owned fresh gates: 384 Rust tests passed; formatting, Clippy `-D warnings`, docs, bswap oracle (2,304 + 20), arena parity, and data-FFI harness (219 checks) passed. Existing private intra-doc-link warnings remain unchanged.
-- Verified implementation: mapper-0 iNES validation, synthetic 6502 execution subset, controller shift behavior, audio-before-frame ordering, 60-frame exit fade, and cleanup semantics.
-- Explicitly open: full 6502 opcode coverage, mappers, PPU/APU/DMA/NMI/IRQ/DMC, fixNES parity, CMake/application activation, and real ROM visual/audio parity.
+- Famicom successor lane: base `08a505b035a33f584bcd35b99badcf2cc442eefe`; parent-exported diff `famicom-full-v3.diff` (`2cd9c9c3f1c1d87cfd46f52627a7fc73b18e94317adae97ad871470dafbfe114`) changed only `rust/nookery-famicom/src/core.rs` and `rust/nookery-famicom/tests/runtime.rs`.
+- Integrated code commit: `7921579223b231e929435de571542e67edf83848`, tree `87f5b0ed2400e52c97c0ffacfa421fa62667b7cb`; the worker could not update its linked-worktree ref because Git metadata was read-only, so the parent applied the exact checked patch.
+- Parent-owned fresh gates: 426 Rust tests passed; formatting, Clippy `-D warnings`, docs, bswap oracle (2,304 + 20), arena parity, and data-FFI harness (219 checks) passed.
+- Verified implementation: expanded official 6502 opcode/addressing coverage, stack/control-flow and read-modify-write operations, page-crossing branches, NMOS indirect-JMP wrapping, CPU-path PPU/APU register boundaries, mapper-0 iNES validation, controller shift behavior, audio-before-frame ordering, 60-frame exit fade, and cleanup semantics.
+- Explicitly open: remaining 6502 opcodes, non-zero mappers, PPU rendering/VRAM semantics, APU waveforms, DMA/NMI/IRQ/DMC timing, fixNES parity, CMake/application activation, and real ROM visual/audio parity.
 
 This wave is **ASSIGNED / NOT ACCEPTED** until exact candidate identities, changed paths, gates, and blockers are read back. No external effects are authorized by this record.
