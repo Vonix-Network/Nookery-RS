@@ -116,17 +116,31 @@ impl RomImage {
             return Err(RomError::MissingTrainer);
         }
 
-        let prg_len = usize::from(bytes[4]) * PRG_BANK_BYTES;
-        let chr_len = usize::from(bytes[5]) * CHR_BANK_BYTES;
-        let declared = prg_len + chr_len;
         let available = bytes.len().saturating_sub(data_offset);
-        if declared == 0 || declared > available {
-            return Err(RomError::TruncatedData {
-                offset: data_offset,
-                required: declared,
-                available,
-            });
-        }
+        let declared_prg_len = usize::from(bytes[4]) * PRG_BANK_BYTES;
+        let declared_chr_len = usize::from(bytes[5]) * CHR_BANK_BYTES;
+        let (prg_len, chr_len) = if declared_prg_len == 0 {
+            // Match pc_fixnes_init: a zero-PRG header treats all remaining
+            // bytes as PRG and discards the declared CHR surface.
+            if available == 0 {
+                return Err(RomError::TruncatedData {
+                    offset: data_offset,
+                    required: 1,
+                    available,
+                });
+            }
+            (available, 0)
+        } else {
+            let declared = declared_prg_len + declared_chr_len;
+            if declared > available {
+                return Err(RomError::TruncatedData {
+                    offset: data_offset,
+                    required: declared,
+                    available,
+                });
+            }
+            (declared_prg_len, declared_chr_len)
+        };
 
         let prg_ram_size = if bytes[8] == 0 {
             0x2000
@@ -373,7 +387,7 @@ impl Bus {
                 if address == 0x4016 {
                     self.controller.write_strobe(value);
                 } else {
-                    self.apu_registers[usize::from(address - 0x4000) & 0x17] = value;
+                    self.apu_registers[usize::from(address - 0x4000)] = value;
                 }
             }
             0x6000..=0x7fff => {}
@@ -415,7 +429,6 @@ struct Cpu {
     p: u8,
     sp: u8,
     pc: u16,
-    halted: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -467,7 +480,6 @@ impl Cpu {
             p: FLAG_INTERRUPT | FLAG_UNUSED,
             sp: 0xfd,
             pc,
-            halted: false,
         }
     }
 
@@ -688,9 +700,6 @@ impl Cpu {
     }
 
     fn step(&mut self, bus: &mut Bus) -> Result<u8, CoreError> {
-        if self.halted {
-            return Ok(1);
-        }
         let pc = self.pc;
         let opcode = bus.read(self.pc);
         self.pc = self.pc.wrapping_add(1);
@@ -1064,9 +1073,6 @@ impl NesCore {
             let cycles = u32::from(self.cpu.step(&mut self.bus)?);
             cpu_cycles += cycles;
             self.ppu_dots = self.ppu_dots.saturating_add(cycles * 3);
-            if self.cpu.halted {
-                break;
-            }
         }
         self.ppu_dots %= target;
         self.frame_number += 1;

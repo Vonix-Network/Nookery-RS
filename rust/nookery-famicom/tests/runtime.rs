@@ -25,6 +25,19 @@ fn increment_fixture() -> Vec<u8> {
     fixture_rom(&[0xa9, 1, 0x8d, 0, 0, 0xe8, 0x4c, 0x05, 0x80])
 }
 
+fn fixture_with_reset(program: &[(usize, u8)], reset: u16) -> Vec<u8> {
+    let mut rom = vec![0; 16 + 0x4000];
+    rom[..4].copy_from_slice(b"NES\x1a");
+    rom[4] = 1;
+    let prg = 16;
+    for &(offset, value) in program {
+        rom[prg + offset] = value;
+    }
+    rom[prg + 0x3ffc] = reset as u8;
+    rom[prg + 0x3ffd] = (reset >> 8) as u8;
+    rom
+}
+
 struct RecordingHost {
     events: Vec<&'static str>,
 }
@@ -72,6 +85,9 @@ fn official_cpu_addressing_stack_rmw_and_register_boundaries_run_end_to_end() {
         0xd0, 0xfd, // BNE $8002
         0x8e, 0x00, 0x20, // STX $2000: PPU register boundary
         0xa9, 0x5a, 0x8d, 0x00, 0x40, // LDA #$5a; STA $4000: APU boundary
+        0xa9, 0xa5, 0x8d, 0x08, 0x40, // STA $4008: distinct APU register
+        0xa9, 0x3c, 0x8d, 0x10, 0x40, // STA $4010: distinct APU register
+        0xa9, 0x77, 0x8d, 0x17, 0x40, // STA $4017: distinct APU register
         0xa9, 0x00, 0x85, 0x20, // Set ($20),Y pointer low
         0xa9, 0x00, 0x85, 0x21, // Set ($20),Y pointer high
         0xa2, 0x00, // LDX #0
@@ -110,6 +126,80 @@ fn official_cpu_addressing_stack_rmw_and_register_boundaries_run_end_to_end() {
     assert_eq!(core.ram()[0x13], 0x99, "JMP indirect target");
     assert_eq!(core.ppu_register(0), Some(0), "PPU bus write");
     assert_eq!(core.apu_register(0), Some(0x5a), "APU bus write");
+    assert_eq!(core.apu_register(8), Some(0xa5), "APU $4008 bus write");
+    assert_eq!(core.apu_register(0x10), Some(0x3c), "APU $4010 bus write");
+    assert_eq!(core.apu_register(0x17), Some(0x77), "APU $4017 bus write");
+}
+
+#[test]
+fn zero_prg_with_chr_uses_remaining_bytes_as_prg_without_panicking() {
+    let mut rom = vec![0xea; 16 + 0x2000];
+    rom[..4].copy_from_slice(b"NES\x1a");
+    rom[4] = 0;
+    rom[5] = 1;
+    rom[6] = 0;
+    rom[7] = 0;
+    let prg = 16;
+    rom[prg + 0x1ffc] = 0;
+    rom[prg + 0x1ffd] = 0x80;
+
+    let image = RomImage::parse(rom).expect("zero-PRG fallback is valid");
+    assert_eq!(image.prg().len(), 0x2000);
+    assert!(image.chr().is_empty());
+    assert!(image.has_chr_ram());
+
+    let mut core = NesCore::new(&image);
+    core.frame()
+        .expect("fallback PRG executes without divide by zero");
+    assert_eq!(core.frame_number(), 1);
+}
+
+#[test]
+fn indirect_jmp_wraps_high_byte_within_page_during_execution() {
+    let rom = fixture_with_reset(
+        &[
+            (0x00, 0x80), // Wrapped high byte for JMP ($80ff).
+            (0x03, 0x6c),
+            (0x04, 0xff),
+            (0x05, 0x80),
+            (0x10, 0xa9), // Target at $8010.
+            (0x11, 0x99),
+            (0x12, 0x85),
+            (0x13, 0x20),
+            (0x14, 0x4c),
+            (0x15, 0x10),
+            (0x16, 0x80),
+            (0xff, 0x10), // Low byte for the wrapped vector.
+        ],
+        0x8003,
+    );
+    let image = RomImage::parse(rom).expect("fixture");
+    let mut core = NesCore::new(&image);
+    core.frame().expect("JMP indirect is supported");
+    assert_eq!(core.ram()[0x20], 0x99, "wrapped indirect JMP target");
+}
+
+#[test]
+fn taken_branch_crosses_page_and_pays_the_penalty() {
+    let rom = fixture_with_reset(
+        &[
+            (0xfd, 0xd0), // BNE from $80fd to $8100.
+            (0xfe, 0x01),
+            (0x100, 0xa9), // Branch target at $8100.
+            (0x101, 0x77),
+            (0x102, 0x85),
+            (0x103, 0x22),
+            (0x104, 0x4c),
+            (0x105, 0x00),
+            (0x106, 0x81),
+        ],
+        0x80fd,
+    );
+    let image = RomImage::parse(rom).expect("fixture");
+    let mut core = NesCore::new(&image);
+    let frame = core.frame().expect("branch is supported");
+    assert_eq!(core.ram()[0x22], 0x77, "cross-page branch target");
+    assert_eq!(frame.cpu_cycles, 29_782, "taken page-cross branch penalty");
 }
 
 #[test]
