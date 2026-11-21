@@ -6,8 +6,8 @@ Owner directive: **finish the complete Rust port** and the separately tracked cl
 
 - Repository: `Vonix-Network/Nookery-RS`, upstream: `flyngmt/Nookery`.
 - Bootstrap ancestor: `03ff4a17f7f1fa1cc083b6e7c3a0ff21927bb15e`.
-- Current Rust workspace: 12 bounded crates, 113 tracked Rust-workspace files, 21,616 lines.
-- Remaining oracle surface: 5,885 tracked C/C/C++ header/source files, approximately 1,004,742 lines.
+- Current Rust workspace: 12 bounded crates, 116 tracked Rust-workspace files, 22,876 lines.
+- Remaining oracle surface: 5,885 tracked C/C++ header/source files, approximately 1,004,742 lines.
 - CMake application configure is currently blocked on this host by missing X11/Wayland development libraries; this remains an environment blocker, not a port completion claim.
 
 ## Non-negotiable contract
@@ -42,5 +42,13 @@ The parent may add further disjoint game/data/UI lanes after the first cohort is
 6. Finish with the end-to-end boot → title → village → save → reload and hosted-town multi-client gates across the available platform cells. Any unavailable cell remains an explicit blocker.
 
 ## Current status
+
+### Reconciled candidate
+
+- Famicom candidate source commit: `fb4f7a87cac5e19af2c73b4cf87d88a85553c151`, tree `5454d3bd1793a1b48aba7456f00105a04e10db3c`; owned-path hashes matched before integration.
+- Integrated code commit: `83549bc650b6937aac290f989a32f8a4a16ff0af`; documentation reconciliation commit: `5b6b4593cdfd0b3d58cef00f193c16efe0d4f439`.
+- Parent-owned fresh gates: 384 Rust tests passed; formatting, Clippy `-D warnings`, docs, bswap oracle (2,304 + 20), arena parity, and data-FFI harness (219 checks) passed. Existing private intra-doc-link warnings remain unchanged.
+- Verified implementation: mapper-0 iNES validation, synthetic 6502 execution subset, controller shift behavior, audio-before-frame ordering, 60-frame exit fade, and cleanup semantics.
+- Explicitly open: full 6502 opcode coverage, mappers, PPU/APU/DMA/NMI/IRQ/DMC, fixNES parity, CMake/application activation, and real ROM visual/audio parity.
 
 This wave is **ASSIGNED / NOT ACCEPTED** until exact candidate identities, changed paths, gates, and blockers are read back. No external effects are authorized by this record.
