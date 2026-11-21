@@ -8,7 +8,7 @@ Owner directive: **finish the complete Rust port** and the separately tracked cl
 - Bootstrap ancestor: `03ff4a17f7f1fa1cc083b6e7c3a0ff21927bb15e`.
 - Current Rust workspace: 15 bounded crates, 139 tracked Rust-workspace files, 34,471 lines.
 - Remaining oracle surface: 5,885 tracked C/C++ header/source files, approximately 1,004,742 lines.
-- CMake application configure is currently blocked on this host by missing X11/Wayland development libraries; this remains an environment blocker, not a port completion claim.
+- CMake application configure and build **now succeed on this host** after installing the SDL3 dev dependencies (`libx11-dev`, `libxext-dev`, `libxrandr-dev`, `libxcursor-dev`, `libxi-dev`, `libxfixes-dev`, `libxss-dev`, `libxtst-dev`, `libxinerama-dev`, `libxkbcommon-dev`, `libwayland-dev`, `libegl1-mesa-dev`, `libgles2-mesa-dev`, `libgl1-mesa-dev`, `libdrm-dev`, `libgbm-dev`, `libasound2-dev`, `libpulse-dev`, `libudev-dev`, `libdbus-1-dev`, `libibus-1.0-dev`). `cmake --preset relwithdebinfo` exits 0 and `ninja` links `bin/Nookery` (5,027/5,027 targets, zero errors, 294,970,368 bytes). The application is still the C path: this proves the build/launch host gate, not a Rust port of phases 7-8.
 
 ## Non-negotiable contract
 

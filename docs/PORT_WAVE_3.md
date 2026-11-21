@@ -35,3 +35,15 @@ Each brief is in `~/.hermes/profiles/oro/cache/scratch/nookery-rs-<lane>-codex.m
 | `social-transport-v3` | **HELD BACK — not integrated.** Parent ran the two loopback tests the lane's sandbox skipped; both failed. (1) Encoder emits a 17-byte `Accepted` payload while the client decoder requires exactly 9 → `PARENT_OBSERVED_CREATE_TOWN=Err(Protocol("snapshot payload"))`. (2) An idle authenticated peer is refused with a typed `Error` frame (code 10), not the `TimedOut` IO error the test asserts → `PARENT_OBSERVED_IDLE_RESULT=Ok(Frame{message_type: Error, payload: [1, 10]})`. Repair lane `social-transport-v3a` dispatched; also required to make sandbox skips explicit so a real failure cannot masquerade as a skip. |
 
 Wave 3 is **PARTIALLY INTEGRATED**. The hosted-town transport lane remains unaccepted pending repair and fresh gates. No external effects are authorized by this record; nothing is pushed.
+
+## Host gate resolved (post-wave)
+
+The host blocker that prevented phase 0 from completing is now closed. `cmake --preset relwithdebinfo` configures successfully and `ninja` links `bin/Nookery` (5,027/5,027 targets, zero errors). Root cause was SDL3's development dependencies, discovered iteratively from real CMake errors rather than guessed: missing X11/Wayland headers first, then `XTEST` specifically.
+
+Verified end-to-end with the owner-supplied USA/Canada disc (`GAFE01`, CISO):
+
+- `wit` (Wiimms ISO Tool) reads the CISO as a valid `CISO/GC GameCube` image: `disc=GAFE01`, `AnimalCrossing`, 16 files.
+- `Nookery <ciso>` runs the app's own `acgc::disc::inspect` gate and proceeds to launch: zero "not a supported Animal Crossing image" warnings, zero prelaunch-menu entries.
+- The application reaches real game boot code (`sound_initial`, `initial_menu_init`, `dvderr_init`, `sound_initial2`, COPYDATE, string-table load) and initializes Vulkan.
+
+This validates the *build and launch* host path only. Phases 7 and 8 remain unported: the runtime is still the C implementation. Frame capture under Xvfb is black because Vulkan presentation needs DRI3, so visual gates are not yet achievable headlessly on this host.

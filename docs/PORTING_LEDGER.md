@@ -24,7 +24,7 @@ Keep the fork's starting point measurable so later phases have an oracle.
 | Deliverable | Documented pin, build matrix, existing Rust crate |
 | Gate | `git rev-parse HEAD` = pinned base; `cargo test --offline` in `rust/` → 18 passed; CMake configures on at least one cell |
 | Observed | The Rust baseline test passed at `a81c1aaf`; the local CMake configure gate is blocked by missing X11/Wayland development libraries on the current host. |
-| Status | **Partial — host CMake gate blocked** |
+| Status | **Gate observed — CMake configures and the application links on this host** (SDL3 dev deps installed; 5,027/5,027 targets, zero errors). Rust `nookery-core` baseline tests pass at `a81c1aaf`. |
 
 ## Phase 1 — Data-folder boundary behind a C ABI
 
@@ -153,7 +153,7 @@ An optimization is accepted only with a row here showing the metric, the before/
 
 | Phase | Scope | State |
 |---|---|---|
-| 0 | Baseline pin + crate tests | **Partial — host CMake gate blocked** |
+| 0 | Baseline pin + crate tests | **Observed — `cmake --preset relwithdebinfo` exits 0 and `bin/Nookery` links; crate tests pass** |
 | 1 | Data-folder C ABI + parity harness | **Candidate — ABI + Rust/C harness pass; C++ parity and CMake linkage unproven** |
 | 2 | Save/GCI + byteswap | **Candidate — GCI validator + primitive bswap + typed leaf/Mail + composite/recovery/write slices + PC card-manager layer (paths, town/Card-B selection, ARAM staging, reset codes, legacy migration); `pc_gci_write` Save_t construction and game-global travel lifecycle open** |
 | 3 | Settings + input | **Candidate — settings model + `#[repr(C)]` PCSettings ABI with oracle-identical layout and `config.json` codec (70-check C harness) + profile/legacy/controller/PAD runtime slice; live SDL/PADStatus wiring and C++ consumer migration open** |
