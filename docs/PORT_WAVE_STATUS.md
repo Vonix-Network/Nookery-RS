@@ -6,7 +6,7 @@ Owner directive: **finish the complete Rust port** and the separately tracked cl
 
 - Repository: `Vonix-Network/Nookery-RS`, upstream: `flyngmt/Nookery`.
 - Bootstrap ancestor: `03ff4a17f7f1fa1cc083b6e7c3a0ff21927bb15e`.
-- Current Rust workspace: 15 bounded crates, 132 tracked Rust-workspace files, 29,051 lines.
+- Current Rust workspace: 15 bounded crates, 132 tracked Rust-workspace files, 29,147 lines.
 - Remaining oracle surface: 5,885 tracked C/C++ header/source files, approximately 1,004,742 lines.
 - CMake application configure is currently blocked on this host by missing X11/Wayland development libraries; this remains an environment blocker, not a port completion claim.
 
@@ -47,8 +47,10 @@ The parent may add further disjoint game/data/UI lanes after the first cohort is
 
 - Famicom successor lane: base `08a505b035a33f584bcd35b99badcf2cc442eefe`; parent-exported diff `famicom-full-v3.diff` (`2cd9c9c3f1c1d87cfd46f52627a7fc73b18e94317adae97ad871470dafbfe114`) changed only `rust/nookery-famicom/src/core.rs` and `rust/nookery-famicom/tests/runtime.rs`.
 - Integrated code commit: `7921579223b231e929435de571542e67edf83848`, tree `87f5b0ed2400e52c97c0ffacfa421fa62667b7cb`; the worker could not update its linked-worktree ref because Git metadata was read-only, so the parent applied the exact checked patch.
-- Parent-owned fresh gates: 426 Rust tests passed; formatting, Clippy `-D warnings`, docs, bswap oracle (2,304 + 20), arena parity, and data-FFI harness (219 checks) passed.
-- Verified implementation: expanded official 6502 opcode/addressing coverage, stack/control-flow and read-modify-write operations, page-crossing branches, NMOS indirect-JMP wrapping, CPU-path PPU/APU register boundaries, mapper-0 iNES validation, controller shift behavior, audio-before-frame ordering, 60-frame exit fade, and cleanup semantics.
+- Independent read-only review of `ec8ecd107beb3f8881d55511dc9869f57f7c1e7e` returned `REJECT`: an accepted zero-PRG/CHR iNES header reached `% self.prg.len()` and panicked, the APU write index `(address - 0x4000) & 0x17` aliased distinct registers, and `Cpu::halted` was dead state.
+- Repair successor `bf3c01257dd9a1a82a32e67b1338e11e63ef322b`, tree `3f54119fad9cf6cd0b8fc8c138b9c1c2ad43f16a`, parent `ec8ecd10…`, applied as checked parent diff `famicom-repair-v4.diff` (`11935ec262540deb59712e18740501d77f0db946e34b30778497c1a2a7053f6d`): zero-PRG falls back to the `pc_fixnes_init` reinterpretation, APU indexing uses the full `$4000..=$4017` offset, dead halt state is removed, and execution tests cover APU addressing, zero-PRG safety, indirect-JMP wrapping, and the page-cross branch penalty.
+- Parent-owned fresh gates on the repair successor: 429 Rust tests passed (Famicom 64), plus formatting, Clippy `-D warnings`, docs, bswap oracle (2,304 + 20), arena parity, and data-FFI harness (219 checks).
+- Parent negative controls reverted each fix separately in a disposable copy and each named test failed for its own reason (zero-PRG parse, APU address 0 vs 8, branch 29,781 vs 29,782 cycles, wrapped indirect target 0 vs 153).
 - Explicitly open: remaining 6502 opcodes, non-zero mappers, PPU rendering/VRAM semantics, APU waveforms, DMA/NMI/IRQ/DMC timing, fixNES parity, CMake/application activation, and real ROM visual/audio parity.
 
 This wave is **ASSIGNED / NOT ACCEPTED** until exact candidate identities, changed paths, gates, and blockers are read back. No external effects are authorized by this record.

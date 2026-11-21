@@ -90,7 +90,7 @@ Third-party emulator; integrate, do not rewrite.
 |---|---|
 | **Target** | `rust/nookery-famicom` host seam first; `pc/src/pc_nes_fixnes.c`, `src/famicom_emu.c`, `src/static/Famicom/` remain the oracle |
 | **Slices** | (a) frame-buffer contract (256×240 RGB565); (b) AI DMA audio cadence; (c) save-header (`0x40`) and internal-ROM table |
-| **Gate — current candidate** | ROM catalog, exact exit combos/countdown, frame-action ordering, PC arena/cleanup contract, mapper-0 iNES validation, expanded official 6502 opcode/addressing subset with stack/control-flow/RMW/page-crossing/indirect-JMP behavior, controller shift behavior, CPU-path PPU/APU register boundaries, audio cadence, and runtime cleanup pass 61 Famicom tests; remaining opcodes, mappers, full emulator/fixNES parity, and application activation remain open. |
+| **Gate — current candidate** | ROM catalog, exact exit combos/countdown, frame-action ordering, PC arena/cleanup contract, mapper-0 iNES validation, expanded official 6502 opcode/addressing subset with stack/control-flow/RMW/page-crossing/indirect-JMP behavior, controller shift behavior, CPU-path PPU/APU register boundaries, audio cadence, and runtime cleanup pass 64 Famicom tests; remaining opcodes, mappers, full emulator/fixNES parity, and application activation remain open. |
 | **Gate — visual** | A known NES ROM renders an identical frame hash (per-frame CRC over the RGB565 buffer) as the C path for a fixed input script |
 | **Gate — audio** | Sample sequence bit-identical for the same script; no underruns introduced |
 | **Constraint** | fixNES is MIT (FIX94) — keep `pc/lib/fixnes/LICENSE` and attribution; do not vendor a different emulator |
