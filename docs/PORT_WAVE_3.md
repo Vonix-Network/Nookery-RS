@@ -6,7 +6,7 @@ Integration rule: each lane returns a candidate only. The parent exports an exac
 
 ## Why this wave
 
-The workspace is 15 bounded crates and 29,147 Rust lines against 5,885 tracked C/C++ files and ~1,004,742 lines. Every crate currently proves a *primitive*, not a user path. Wave 3 targets the four places where a real user path is closest and where the oracle is small enough to port completely rather than approximate:
+The workspace was 15 bounded crates and 29,147 Rust lines when this wave was dispatched, against 5,885 tracked C/C++ files and ~1,004,742 lines. Every crate currently proves a *primitive*, not a user path. Wave 3 targets the four places where a real user path is closest and where the oracle is small enough to port completely rather than approximate:
 
 | Lane | Oracle | Why it is next |
 |---|---|---|
@@ -27,11 +27,11 @@ Each brief is in `~/.hermes/profiles/oro/cache/scratch/nookery-rs-<lane>-codex.m
 
 ## Status
 
-| Lane | Process | State |
-|---|---|---|
-| `save-card-v3` | `proc_16ede28f2cd6` | dispatched |
-| `settings-abi-v3` | `proc_69e22fd82386` | dispatched |
-| `famicom-ppu-v3` | `proc_45b0316eb4e6` | dispatched |
-| `social-transport-v3` | `proc_b09f274118d7` | dispatched |
+| Lane | State |
+|---|---|
+| `save-card-v3` | **Integrated** `3b4638c5` — `rust/nookery-save/src/manager.rs` (+1069), `tests/card_manager.rs` (+246). Parent gates: fmt, 65 save tests, clippy, doc, bswap, arena, data-FFI all PASS; 443 workspace tests. Parent negative controls: reverting the same-town skip and dropping the 64-entry cap each failed their named assertion. |
+| `settings-abi-v3` | **Integrated** `b73529d3` — `PCSettings` `#[repr(C)]` ABI + `config.json` codec + `tools/settings-abi` harness (70 checks). Parent cross-checked all 16 offsets/size/alignment against the real `pc_settings.h` by compiling each header separately; identical. Repair round v3a fixed a blocker: the crate header defined a duplicate `PCSettings`, so no TU could include both headers. |
+| `famicom-ppu-v3` | **Integrated** `b73529d3` — `rust/nookery-famicom/src/ppu.rs` + `tests/ppu.rs`: registers/latches/buffering/increment/mirroring/palette/OAM, background, sprites, frame hash. 68 Famicom tests. |
+| `social-transport-v3` | **HELD BACK — not integrated.** Parent ran the two loopback tests the lane's sandbox skipped; both failed. (1) Encoder emits a 17-byte `Accepted` payload while the client decoder requires exactly 9 → `PARENT_OBSERVED_CREATE_TOWN=Err(Protocol("snapshot payload"))`. (2) An idle authenticated peer is refused with a typed `Error` frame (code 10), not the `TimedOut` IO error the test asserts → `PARENT_OBSERVED_IDLE_RESULT=Ok(Frame{message_type: Error, payload: [1, 10]})`. Repair lane `social-transport-v3a` dispatched; also required to make sandbox skips explicit so a real failure cannot masquerade as a skip. |
 
-This wave is **ASSIGNED / NOT ACCEPTED**. No external effects are authorized by this record.
+Wave 3 is **PARTIALLY INTEGRATED**. The hosted-town transport lane remains unaccepted pending repair and fresh gates. No external effects are authorized by this record; nothing is pushed.
