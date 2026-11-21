@@ -37,9 +37,11 @@
 #![deny(missing_docs)]
 
 pub mod alloc;
+pub mod core;
 pub mod exit;
 pub mod input;
 pub mod rom;
+pub mod runtime;
 
 pub use alloc::{
     ALLOCATION_FILL_BYTE, ARENA_ALIGNMENT, ArenaPlan, ArenaPlanError, CleanupStep,
@@ -58,3 +60,4 @@ pub use input::{
 pub use rom::{
     MAX_ROM_ID, RESOURCE_PATH_CAPACITY, ROM_NAMES, ROM_SLOT_COUNT, ResourcePath, RomId, RomIdError,
 };
+pub use runtime::{FamicomRuntime, FrameReport, RuntimeError, RuntimeState, controller_byte};
