@@ -132,7 +132,7 @@ This is a separate R3 feature track in addition to the 1:1 Rust port. It must ad
 
 | Item | Current state / required evidence |
 |---|---|
-| **Status** | **Bounded candidates integrated — source and security architecture advisories complete**; `nookery-social-proto`, `nookery-social-model`, `nookery-social-persistence`, and `nookery-social-server` pass local gates for offline/local behavior, but no network transport, authentication, client/game integration, or deployed service exists in the current tree |
+| **Status** | **Loopback vertical slice integrated**; `nookery-social-proto`, `nookery-social-model`, `nookery-social-persistence`, and `nookery-social-server` run a real TCP loopback session with nonce challenge-response authentication, constant-time token comparison, single-use nonces, role-based authorization, reconnect/idempotency, and crash-safe persistence recovery, exercised by executed socket tests plus non-socket regressions. No real game-client integration, NAT traversal, discovery service, deployment, or public exposure exists in the current tree |
 | **Required surface** | Hosted towns, session discovery/join/leave, host/resident/visitor permissions, synchronized gameplay state, persistence/checkpoints, reconnect/recovery, and a client integration path through the real frame/input/save boundaries |
 | **Required gates** | Runnable client/server vertical slice; deterministic multi-client simulation; authorization and hostile-packet negative tests; crash-safe persistence/recovery; reconnect and duplicate-delivery tests; offline regression; platform/user-path checks; no asset or proprietary-protocol dependency |
 | **Acceptance boundary** | Architecture prose or a compiling server crate is not completion. Acceptance requires an exercised hosted-town user path with exact candidate identity, fresh security gates, and separately authorized deployment/effect records |
@@ -162,6 +162,6 @@ An optimization is accepted only with a row here showing the metric, the before/
 | 6 | Disc + content | **Candidate — catalog/header/hash + bounded RVZ/CISO/raw stream verification + texture path/index seams; Aurora format decoding, texture runtime, and user path open** |
 | 7 | UI + platform services | Not started |
 | 8 | Boot + integration | Not started |
-| 9 | Hosted-town multiplayer | **Candidate — bounded clean-room frame codec + authority model + local persistence/server vertical slice; transport, auth, reconnect over real clients, client/game integration, and multi-client runtime remain open** |
+| 9 | Hosted-town multiplayer | **Candidate — clean-room frame codec + authority model + local persistence + loopback TCP transport with nonce challenge-response auth, role authorization, reconnect/idempotency, and negative security tests (458 workspace tests include 37 social-server cases); real game-client integration, NAT traversal, discovery service, multi-client runtime, and deployment remain open** |
 
 “Candidate” means the primitive exists and passes its own unit tests; it does **not** mean the user path is ported. See [`PORTING_RUST.md`](./PORTING_RUST.md) for the measured evidence behind each row.
