@@ -16,21 +16,20 @@
 //! * Recovery-companion path derivation (`pc_gci_sibling_path` and the
 //!   suffix tables).
 //! * Typed byte-swap for five leaf structs and the bounded Mail composite
-//!   slice (`typed_swap`): `lbRTC_time_c`, `lbRTC_ymd_c`, `PersonalID_c`,
-//!   `AnmPersonalID_c`, `mLd_land_info_c`, `Mail_nm_c`, `Mail_hdr_c`,
-//!   `Mail_ct_c`, and `Mail_c`, matching the `swap_*` helpers at
-//!   `pc/src/pc_save_bswap.c:181-220`.
+//!   slice (`typed_swap`), plus the exact raw Mail/original-design/diary keep
+//!   block walkers in `composite`, matching the named `swap_*` helpers in
+//!   `pc/src/pc_save_bswap.c`.
 //!
 //! # Explicit non-goals
 //!
-//! * No whole-`Save_t` or Mail-array byte-order decoding, quest walkers, ARAM,
-//!   card I/O, or runtime integration. The upstream walkers depend on the full
-//!   decompiled struct layout (`pc/src/pc_save_bswap.c`); this crate validates
-//!   the big-endian bytes on disk, hands them back unmodified, and swaps only
-//!   the five leaves plus one source-grounded `Mail_c` in [`typed_swap`].
-//! * No writing, backup rotation, or import.  `pc_gci_write` mutates the
-//!   filesystem and constructs game data, so it is out of scope for a
-//!   validation slice.
+//! * No complete `Save_t` byte-order decoding, legacy-PC decoding, quest
+//!   deadline relocation, or runtime card/travel integration. The upstream
+//!   whole-save walker depends on the full decompiled struct layout
+//!   (`pc/src/pc_save_bswap.c`). This crate validates big-endian bytes on disk,
+//!   exposes them unmodified, and swaps only source-pinned composite regions.
+//! * No host-struct `pc_gci_write` port. The Rust staged writer and manager
+//!   cover synthetic, already-encoded records and recovery rotation only;
+//!   construction from live `Save_t`/ARAM/game globals remains open.
 //! * No `Save_t` field interpretation beyond the offsets pinned by upstream
 //!   `_Static_assert`s (version, save code, land id, checksum).
 //!
@@ -50,6 +49,24 @@ pub mod manager;
 pub mod path;
 pub mod record;
 pub mod typed_swap;
+
+/// Exact remaining C symbols and behaviors intentionally outside this crate's
+/// current bounded parity surface.
+///
+/// This is kept as data so downstream reports cannot accidentally imply full
+/// save/card/travel parity after a bounded slice lands.
+pub const NOT_PORTED: &[&str] = &[
+    "pc_save_bswap: whole Save_t fields outside swap_save_t_verified, including homes, field, animals, shop, events, post office, island, fish records, and trailing save fields",
+    "pc_save_bswap_from_legacy_pc: legacy-PC layout decode",
+    "pc_save_relocate_quest_time_limits: all delivery/errand/animal quest deadline relocation",
+    "pc_save_bswap_verify_roundtrip: whole Save_t BE->LE->BE oracle verification",
+    "swap_mQst_errand legacy=TRUE chain-union behavior and contest-quest instances outside the private quest regions",
+    "pc_gci_read_image: post-validation byte-order decode, legacy title conversion, and saved_auto_nwrite_time mutation",
+    "pc_gci_write: live host Save_t/ARAM construction, byte swapping, comment/name generation, timestamped CARDDir creation, and durable filesystem transaction",
+    "mCD_save_data_aram_malloc/mCD_set_aram_save_data/mCD_save_data_aram_to_main/mCD_save_data_main_to_aram: Dolphin ARAM/card DMA lifecycle (Rust only models explicit buffers)",
+    "pc_save_pre_write_side_effects: live play-time, money-stone, reset-code, and global Save/Common state integration",
+    "mCD_LoadLand, mCD_SaveStation_NextLand_bg, mCD_SaveStation_Passport_bg, mCD_toNextLand, and passport mCD_foreigner_c serialization: complete travel lifecycle",
+];
 
 pub use checksum::{checksum_be, verify_block};
 pub use dir::{CardDir, FILE_NAME_MAX, HEADER_SIZE};

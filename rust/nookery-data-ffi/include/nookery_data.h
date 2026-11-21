@@ -126,7 +126,9 @@ typedef struct NookeryDataDirReport {
 
 /* Selector for `nookery_data_directory`.  Declaration order is the order the
  * directories are created in: the four from `DataLayout::required_directories`,
- * then the cache directory that upstream `ensure_folders` appends. */
+ * then the cache directory that upstream `ensure_folders` appends.  The cache
+ * location is `<root>/cache` by default and may be injected with
+ * `nookery_data_set_cache_root`. */
 typedef enum NookeryDataDirKind {
     NOOKERY_DATA_DIR_SAVE_CARD_A = 0,
     NOOKERY_DATA_DIR_SAVE_CARD_B = 1,
@@ -160,6 +162,12 @@ uint32_t nookery_data_handle_create(const NookeryDataCreateOptions *options,
                                     NookeryDataHandle **out_handle);
 /* Frees a handle.  NULL is accepted and ignored. */
 void nookery_data_handle_destroy(NookeryDataHandle *handle);
+
+/* Overrides the cache directory used by initialization.  The default remains
+ * <root>/cache; this setter lets a host inject Borealis' Paths::cachePath when
+ * it is an external preference directory. */
+uint32_t nookery_data_set_cache_root(NookeryDataHandle *handle,
+                                     const char *cache_root_utf8);
 
 /* Creates `save/card_a`, `save/card_b`, `texture_pack`, `nes_roms` and the
  * cache directory below the root, in that order, continuing past failures.

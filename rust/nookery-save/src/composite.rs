@@ -38,12 +38,22 @@ pub const SAVE_T_SIZE: usize = 0x242A0;
 pub const SAVE_SIZE: usize = 0x26000;
 /// Exact sector-rounded `mCD_KEEP_MAIL_SIZE`.
 pub const KEEP_MAIL_SIZE: usize = 0xBAC0;
+/// Exact sector-rounded `mCD_KEEP_ORIGINAL_SIZE`.
+pub const KEEP_ORIGINAL_SIZE: usize = 0xCCA0;
+/// Exact sector-rounded `mCD_KEEP_DIARY_SIZE`.
+pub const KEEP_DIARY_SIZE: usize = 0xBA20;
 /// Number of mail pages in `mCD_keep_mail_c`.
 pub const KEEP_MAIL_PAGE_COUNT: usize = 8;
 /// Number of mail entries per keep-mail page.
 pub const KEEP_MAIL_COUNT: usize = 20;
 /// The first `Mail_c` in `mCD_keep_mail_c`.
 pub const KEEP_MAIL_ENTRIES_OFFSET: usize = 0x64;
+/// The `_CC80` trailer field in `mCD_keep_original_c`.
+///
+/// The member name in `include/m_card.h` and the C swap helper's
+/// `orig->_CC80` access pin this wire offset.  The intervening bytes are
+/// alignment/padding and are intentionally left untouched.
+pub const KEEP_ORIGINAL_TRAILER_OFFSET: usize = 0xCC80;
 /// The first `Private_c` in `Save_t`.
 pub const SAVE_PRIVATE_OFFSET: usize = 0x20;
 /// The `Save_t.land_info` offset.
@@ -415,6 +425,30 @@ pub fn swap_keep_mail(bytes: &mut [u8], direction: SwapDirection) -> Result<(), 
     Ok(())
 }
 
+/// Swap the exact scalar fields covered by `pc_save_bswap_keep_original`.
+///
+/// The folder names and all 96 `mNW_original_design_c` values are byte data;
+/// the C oracle swaps only the checksum, land id, and `_CC80` trailer.  The
+/// direction is accepted for API symmetry, but each operation is a
+/// self-inverse 16/32-bit byte swap.
+pub fn swap_keep_original(bytes: &mut [u8], _direction: SwapDirection) -> Result<(), GciError> {
+    require(bytes, KEEP_ORIGINAL_SIZE)?;
+    swap_u16(bytes, 0)?;
+    swap_u16(bytes, 2)?;
+    swap_u32(bytes, KEEP_ORIGINAL_TRAILER_OFFSET)?;
+    Ok(())
+}
+
+/// Swap the checksum covered by `pc_save_bswap_keep_diary`.
+///
+/// Diary entries are fixed-size byte text (`mDi_entry_c`), so the C oracle
+/// deliberately leaves the rest of the `mCD_keep_diary_c` block unchanged.
+pub fn swap_keep_diary(bytes: &mut [u8], _direction: SwapDirection) -> Result<(), GciError> {
+    require(bytes, KEEP_DIARY_SIZE)?;
+    swap_u16(bytes, 0)?;
+    Ok(())
+}
+
 fn swap_private_verified(
     bytes: &mut [u8],
     base: usize,
@@ -693,6 +727,9 @@ mod tests {
         assert_eq!(align_of::<SaveTBytes>(), 4);
         assert_eq!(size_of::<KeepMailBytes>(), KEEP_MAIL_SIZE);
         assert_eq!(align_of::<KeepMailBytes>(), 32);
+        assert_eq!(KEEP_ORIGINAL_SIZE, 0xCCA0);
+        assert_eq!(KEEP_ORIGINAL_TRAILER_OFFSET, 0xCC80);
+        assert_eq!(KEEP_DIARY_SIZE, 0xBA20);
     }
 
     #[test]

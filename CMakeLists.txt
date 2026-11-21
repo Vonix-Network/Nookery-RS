@@ -62,6 +62,13 @@ if (ENABLE_SANITIZERS)
     message(STATUS "metaforce: Enabled sanitizers")
 endif ()
 
+# The Rust data adapter is candidate-only. Keep the application on the
+# existing C++ data path unless the standalone C++/Rust parity gate is
+# explicitly requested in a configured Linux host build.
+option(ENABLE_DATA_FFI_PARITY
+       "Build the opt-in C++/Rust data-folder parity executable (Linux host only)"
+       OFF)
+
 set(AURORA_ENABLE_DVD ON CACHE BOOL "" FORCE)
 set(AURORA_ENABLE_CARD ON CACHE BOOL "" FORCE)
 set(AURORA_ENABLE_RMLUI ON CACHE BOOL "" FORCE)
@@ -503,6 +510,67 @@ target_link_libraries(acgc PRIVATE
     aurora::si
     aurora::vi
 )
+
+if (ENABLE_DATA_FFI_PARITY)
+    if (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
+        message(FATAL_ERROR "ENABLE_DATA_FFI_PARITY is currently supported only in a Linux host build")
+    endif ()
+
+    find_program(DATA_FFI_CARGO_EXECUTABLE cargo REQUIRED)
+    find_package(Threads REQUIRED)
+
+    set(DATA_FFI_CARGO_TARGET_DIR "${CMAKE_BINARY_DIR}/data-ffi-cargo")
+    set(DATA_FFI_RUST_LIBRARY "${DATA_FFI_CARGO_TARGET_DIR}/release/libnookery_data_ffi.a")
+    file(GLOB_RECURSE DATA_FFI_RUST_SOURCES CONFIGURE_DEPENDS
+        "${DECOMP_ROOT}/rust/nookery-data-ffi/src/*.rs"
+        "${DECOMP_ROOT}/rust/nookery-core/src/*.rs"
+    )
+    add_custom_command(
+        OUTPUT "${DATA_FFI_RUST_LIBRARY}"
+        COMMAND ${CMAKE_COMMAND} -E env
+            "CARGO_TARGET_DIR=${DATA_FFI_CARGO_TARGET_DIR}"
+            "${DATA_FFI_CARGO_EXECUTABLE}" build --release
+            --manifest-path "${DECOMP_ROOT}/rust/Cargo.toml"
+            --package nookery-data-ffi
+        DEPENDS ${DATA_FFI_RUST_SOURCES}
+            "${DECOMP_ROOT}/rust/Cargo.toml"
+            "${DECOMP_ROOT}/rust/Cargo.lock"
+        COMMENT "Building the opt-in nookery-data-ffi static library"
+        VERBATIM
+    )
+    add_custom_target(nookery-data-ffi-staticlib DEPENDS "${DATA_FFI_RUST_LIBRARY}")
+
+    add_library(nookery_data_ffi_static STATIC IMPORTED GLOBAL)
+    set_target_properties(nookery_data_ffi_static PROPERTIES
+        IMPORTED_LOCATION "${DATA_FFI_RUST_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${DECOMP_ROOT}/rust/nookery-data-ffi/include"
+    )
+
+    add_executable(nookery-data-ffi-parity
+        "${DECOMP_ROOT}/tools/data-ffi/parity.cpp"
+        "${PC_ROOT}/src/acgc_data.cpp"
+    )
+    add_dependencies(nookery-data-ffi-parity nookery-data-ffi-staticlib)
+    target_include_directories(nookery-data-ffi-parity PRIVATE
+        "${PC_ROOT}/include"
+        "${DECOMP_ROOT}/rust/nookery-data-ffi/include"
+    )
+    target_link_libraries(nookery-data-ffi-parity PRIVATE
+        nookery_data_ffi_static
+        borealis::data
+        borealis::log
+        Threads::Threads
+        ${CMAKE_DL_LIBS}
+        m
+    )
+
+    add_custom_target(nookery-data-ffi-parity-test
+        COMMAND "$<TARGET_FILE:nookery-data-ffi-parity>"
+        DEPENDS nookery-data-ffi-parity
+        USES_TERMINAL
+        COMMENT "Running the C++/Rust data-folder parity gate"
+    )
+endif ()
 
 set_target_properties(acgc PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

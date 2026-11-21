@@ -276,6 +276,40 @@ fn indirect_jmp_wraps_high_byte_within_page_during_execution() {
 }
 
 #[test]
+fn ppu_nmi_pushes_return_state_and_runs_the_fffa_handler() {
+    let mut program = vec![
+        0xa9, 0x80, 0x8d, 0x00, 0x20, // enable PPU NMI
+        0x4c, 0x05, 0x80, // wait in a stable loop
+    ];
+    program.resize(0x1000, 0xea);
+    program.extend([
+        0xad, 0xfd, 0x01, 0x85, 0x21, // saved PC high
+        0xad, 0xfc, 0x01, 0x85, 0x22, // saved PC low
+        0xad, 0xfb, 0x01, 0x85, 0x23, // saved status, B clear and U set
+        0xa9, 0x77, 0x85, 0x20, // NMI handler marker
+        0x40, // RTI restores PC and P
+    ]);
+    let mut rom = fixture_rom(&program);
+    let prg = 16;
+    rom[prg + 0x3ffa] = 0x00;
+    rom[prg + 0x3ffb] = 0x90;
+    let image = RomImage::parse(rom).expect("NMI fixture");
+    let mut core = NesCore::new(&image);
+    let frame = core.frame().expect("NMI handler executes");
+
+    assert_eq!(core.ram()[0x20], 0x77);
+    assert_eq!(core.ram()[0x21], 0x80);
+    assert_eq!(core.ram()[0x22], 0x05);
+    assert_eq!(core.ram()[0x23], 0xa4);
+    assert_eq!(core.program_counter(), 0x8005);
+    assert!(
+        frame.cpu_cycles >= 29_781,
+        "NMI does not shorten the frame cadence: {}",
+        frame.cpu_cycles,
+    );
+}
+
+#[test]
 fn taken_branch_crosses_page_and_pays_the_penalty() {
     let rom = fixture_with_reset(
         &[

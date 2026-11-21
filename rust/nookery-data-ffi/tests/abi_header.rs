@@ -119,6 +119,7 @@ fn the_header_declares_every_entry_point_the_library_exports() {
         "nookery_data_status_count",
         "nookery_data_handle_create",
         "nookery_data_handle_destroy",
+        "nookery_data_set_cache_root",
         "nookery_data_initialize",
         "nookery_data_root",
         "nookery_data_directory",

@@ -248,6 +248,46 @@ fn register_fixture_checks_status_buffer_increment_and_mirroring() {
     assert_eq!(hcore.ram()[0x14], 0x33);
 }
 
+#[test]
+fn nmi_edge_is_raised_once_after_vblank_enable_and_status_read_suppresses_it() {
+    let mut ppu = nookery_famicom::Ppu::new(&[], true, nookery_famicom::Mirroring::Horizontal);
+    ppu.write_register(0x2000, 0x80);
+    ppu.add_dots(241 * 341 + 5);
+    assert!(ppu.poll_nmi(), "ppuNMI raises one edge after vblank");
+    assert!(!ppu.poll_nmi(), "ppuNMI does not repeat the same edge");
+
+    let mut suppressed =
+        nookery_famicom::Ppu::new(&[], true, nookery_famicom::Mirroring::Horizontal);
+    suppressed.write_register(0x2000, 0x80);
+    suppressed.add_dots(241 * 341 + 3);
+    assert_eq!(suppressed.read_register(0x2002), 0x80);
+    suppressed.add_dots(2);
+    assert!(
+        !suppressed.poll_nmi(),
+        "ppu.c status read clears the NMI window"
+    );
+
+    let mut early_read =
+        nookery_famicom::Ppu::new(&[], true, nookery_famicom::Mirroring::Horizontal);
+    early_read.write_register(0x2000, 0x80);
+    assert_eq!(early_read.read_register(0x2002), 0x80);
+    early_read.add_dots(241 * 341 + 5);
+    assert!(
+        early_read.poll_nmi(),
+        "an early status read does not leak into the next vblank"
+    );
+}
+
+#[test]
+fn short_chr_surface_is_zero_filled_without_out_of_bounds_access() {
+    let mut ppu = nookery_famicom::Ppu::new(&[0xa5], true, nookery_famicom::Mirroring::Vertical);
+    ppu.write_register(0x2000, 0x00);
+    ppu.write_register(0x2001, 0x08);
+    let frame = ppu.render();
+    assert_eq!(frame.pixels.len(), 256 * 240);
+    assert_eq!(frame.pixels[0], 0);
+}
+
 const SPRITE_PRIORITY: u8 = 1 << 5;
 const SPRITE_FLIP_X: u8 = 1 << 6;
 const SPRITE_FLIP_Y: u8 = 1 << 7;

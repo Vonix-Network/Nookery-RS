@@ -2,7 +2,7 @@
 //!
 //! The implementation ports the highest-value PC fixNES contracts without
 //! calling the C emulator: iNES validation and mapper-0 PRG mapping, the
-//! reset-vector/6502 instruction path needed by synthetic fixtures, the
+//! reset-vector/6502 instruction and PPU-NMI path needed by synthetic fixtures, the
 //! controller shift register, a frame-sampled mapper-0 PPU picture, NTSC
 //! frame timing, and the fixed 32 kHz/60 audio handoff size. Full mapper and
 //! APU waveform behavior, plus exact mid-scanline PPU timing, remain typed
@@ -216,8 +216,8 @@ impl RomImage {
 /// Typed surfaces that remain outside this candidate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CoreGap {
-    /// The PPU renderer is frame-sampled; exact mid-scanline timing and NMI
-    /// sequencing are not ported.
+    /// The PPU renderer is frame-sampled; exact mid-scanline rendering is not
+    /// ported. The bounded vblank NMI edge and CPU entry sequence are ported.
     PpuRendering,
     /// The APU emits a correctly sized silent handoff, not channel waveforms.
     ApuWaveforms,
@@ -232,6 +232,26 @@ pub enum CoreGap {
     /// not included in the native instruction-cycle total.
     OamDmaCycleStealing,
 }
+
+/// Exact fixNES C symbols and behaviors still outside this candidate.
+///
+/// This is intentionally a source-surface ledger, not a claim of emulator
+/// completeness. The names below are the remaining C entry points or helper
+/// families that the mapper-0/native path does not implement.
+pub const NOT_PORTED: &[&str] = &[
+    "mapperInit / mapperInitNSF / mapperInitFDS (pc/lib/fixnes/mapper.c)",
+    "mapperCycle / mapperReset and all pc/lib/fixnes/mapper/*.c bank-switch handlers",
+    "apuCycle / apuUpdate / apuGetBuf / apuGetBufSize (pc/lib/fixnes/apu.c)",
+    "apuSetReg00..apuSetReg17 channel sequencing and waveform synthesis",
+    "apuGetReg15 channel/DMC IRQ status (pc/lib/fixnes/apu.c)",
+    "cpuDoDMA / cpuDMATryHalt / cpuTryTakeover (pc/lib/fixnes/cpu.c)",
+    "cpuSoftReset / ppuSoftReset / ppuReset soft-reset request sequencing",
+    "cpuDoOAM_DMA 513/514-cycle stall (pc/lib/fixnes/cpu.c)",
+    "cpuKIL, cpuSLO, cpuRLA, cpuSRE, cpuRRA, cpuDCP, cpuISC and other unofficial opcode handlers",
+    "ppuCycle / ppuDrawDone scanline rendering and mapper-cycle timing (pc/lib/fixnes/ppu.c)",
+    "inputGetP2 open-bus read behavior (pc/lib/fixnes/input.c)",
+    "pc_fixnes_render_frame / fixnes_capture_audio host conversion and DMA (pc/src/pc_nes_fixnes.c)",
+];
 
 /// A deterministic core error after ROM validation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -553,6 +573,15 @@ impl Cpu {
     fn pop(&mut self, bus: &mut Bus) -> u8 {
         self.sp = self.sp.wrapping_add(1);
         bus.read(0x0100 | u16::from(self.sp))
+    }
+
+    fn service_nmi(&mut self, bus: &mut Bus) -> u8 {
+        self.push(bus, (self.pc >> 8) as u8);
+        self.push(bus, self.pc as u8);
+        self.push(bus, (self.p & !FLAG_BREAK) | FLAG_UNUSED);
+        self.p |= FLAG_INTERRUPT;
+        self.pc = bus.read_u16(0xfffa);
+        7
     }
 
     fn adc(&mut self, value: u8) {
@@ -1163,7 +1192,11 @@ impl NesCore {
         let target = NTSC_DOTS_PER_LINE * NTSC_LINES_PER_FRAME;
         let mut cpu_cycles = 0;
         while self.ppu_dots < target {
-            let cycles = u32::from(self.cpu.step(&mut self.bus)?);
+            let cycles = if self.bus.ppu.poll_nmi() {
+                u32::from(self.cpu.service_nmi(&mut self.bus))
+            } else {
+                u32::from(self.cpu.step(&mut self.bus)?)
+            };
             cpu_cycles += cycles;
             let ppu_dots = cycles * 3;
             self.ppu_dots = self.ppu_dots.saturating_add(ppu_dots);

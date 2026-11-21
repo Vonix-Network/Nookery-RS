@@ -2,9 +2,10 @@
 //!
 //! The register and memory rules in this module follow the corresponding
 //! fixNES paths in `pc/lib/fixnes/ppu.c`: register writes (`1699..1805`),
-//! register reads (`1807..1856`), nametable mapping (`1907..1943`), and
-//! palette mirroring (`1980..2001`).  Rendering is intentionally sampled at
-//! the frame boundary; mid-scanline writes and NMI delivery are not modeled.
+//! register reads (`1807..1856`), nametable mapping (`1907..1943`), palette
+//! mirroring (`1980..2001`), and the bounded `ppuNMI` latch (`1859..1877`).
+//! Rendering is intentionally sampled at the frame boundary; mid-scanline
+//! rendering remains outside this candidate.
 
 /// Visible NES picture width.
 pub const FRAME_WIDTH: usize = 256;
@@ -90,6 +91,10 @@ pub struct Ppu {
     mirroring: Mirroring,
     dot: u16,
     line: u16,
+    nmi_allowed: bool,
+    nmi_triggered: bool,
+    nmi_pending: bool,
+    vblank_read: bool,
 }
 
 impl Ppu {
@@ -116,6 +121,10 @@ impl Ppu {
             mirroring,
             dot: 0,
             line: 0,
+            nmi_allowed: false,
+            nmi_triggered: false,
+            nmi_pending: false,
+            vblank_read: false,
         };
         // fixNES ppuInit starts with the vblank status bit set (ppu.c:292).
         ppu.regs[2] = STATUS_VBLANK;
@@ -155,11 +164,25 @@ impl Ppu {
     /// Advances the visible timing state by PPU dots.
     pub fn add_dots(&mut self, dots: u32) {
         for _ in 0..dots {
-            if self.line == 241 && self.dot == 1 {
-                self.regs[2] |= STATUS_VBLANK;
+            if self.line == 241 && self.dot == 0 {
+                self.vblank_read = false;
             }
-            if self.line == 261 && self.dot == 1 {
+            if self.line == 241 && self.dot == 2 {
+                self.nmi_triggered = false;
+                if !self.vblank_read {
+                    self.regs[2] |= STATUS_VBLANK;
+                }
+                self.vblank_read = false;
+            }
+            if self.line == 241 && self.dot == 4 && self.regs[2] & STATUS_VBLANK != 0 {
+                self.nmi_allowed = true;
+                self.update_nmi_pending();
+            }
+            if self.line == 261 && self.dot == 2 {
                 self.regs[2] &= !(STATUS_VBLANK | STATUS_SPRITE_ZERO | STATUS_OVERFLOW);
+                self.nmi_allowed = false;
+                self.nmi_pending = false;
+                self.vblank_read = false;
             }
             self.dot += 1;
             if self.dot == 341 {
@@ -179,6 +202,11 @@ impl Ppu {
                 let value = self.regs[2];
                 self.regs[2] &= !STATUS_VBLANK;
                 self.w = false;
+                if value & STATUS_VBLANK != 0 {
+                    self.vblank_read = true;
+                    self.nmi_allowed = false;
+                    self.nmi_pending = false;
+                }
                 value
             }
             4 => self.oam[usize::from(self.oam_addr)],
@@ -209,6 +237,7 @@ impl Ppu {
             0 => {
                 self.regs[0] = value;
                 self.t = (self.t & !0x0c00) | (u16::from(value & 3) << 10);
+                self.update_nmi_pending();
             }
             1 => self.regs[1] = value,
             3 => self.oam_addr = value,
@@ -245,6 +274,24 @@ impl Ppu {
             }
             _ => {}
         }
+    }
+
+    fn update_nmi_pending(&mut self) {
+        if self.nmi_allowed
+            && self.regs[0] & (1 << 7) != 0
+            && self.regs[2] & STATUS_VBLANK != 0
+            && !self.nmi_triggered
+        {
+            self.nmi_pending = true;
+            self.nmi_triggered = true;
+        }
+    }
+
+    /// Consumes one edge-triggered NMI request from the C `ppuNMI` contract.
+    pub fn poll_nmi(&mut self) -> bool {
+        let pending = self.nmi_pending;
+        self.nmi_pending = false;
+        pending
     }
 
     fn increment_vram_address(&mut self) {

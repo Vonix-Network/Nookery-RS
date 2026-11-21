@@ -24,6 +24,7 @@ use crate::handle::{DataHandle, DataPlan, destroy};
 
 /// Layout version of every struct in `include/nookery_data.h`.
 pub const ABI_VERSION: u32 = 1;
+pub const MAX_PATH_BYTES: usize = 4096;
 
 /// The `NOOKERY_DATA_ABI_VERSION` a C caller must send.
 #[unsafe(no_mangle)]
@@ -54,6 +55,9 @@ unsafe fn required_str<'a>(text: *const c_char) -> Result<&'a str, RawStatus> {
     }
     // SAFETY: caller contract: non-null, NUL-terminated.
     let bytes = unsafe { CStr::from_ptr(text) }.to_bytes();
+    if bytes.len() > MAX_PATH_BYTES {
+        return Err(STATUS_INVALID_ARGUMENT);
+    }
     std::str::from_utf8(bytes).map_err(|_| STATUS_INVALID_ARGUMENT)
 }
 
@@ -173,6 +177,34 @@ pub unsafe extern "C" fn nookery_data_handle_create(
 pub unsafe extern "C" fn nookery_data_handle_destroy(handle: *mut DataHandle) {
     // SAFETY: forwarded contract.
     unsafe { destroy(handle) };
+}
+
+/// Override the cache directory used by initialization.  This is an explicit
+/// injection point for hosts whose Borealis `Paths::cachePath` is outside the
+/// active data root; the default remains `<root>/cache` for ABI compatibility.
+///
+/// # Safety
+/// `handle` must be null or a live handle; `cache_root_utf8` must be null or a
+/// valid NUL-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nookery_data_set_cache_root(
+    handle_ptr: *mut DataHandle,
+    cache_root_utf8: *const c_char,
+) -> RawStatus {
+    let Some(handle) = (unsafe { handle(handle_ptr) }) else {
+        return STATUS_INVALID_ARGUMENT;
+    };
+    // SAFETY: forwarded string contract.
+    let Ok(cache_root) = (unsafe { required_str(cache_root_utf8) }) else {
+        handle.record(STATUS_INVALID_ARGUMENT);
+        return STATUS_INVALID_ARGUMENT;
+    };
+    let status = match handle.set_cache_root(cache_root) {
+        Ok(()) => STATUS_OK,
+        Err(status) => status,
+    };
+    handle.record(status);
+    status
 }
 
 /* --- Initialization ------------------------------------------------------ */

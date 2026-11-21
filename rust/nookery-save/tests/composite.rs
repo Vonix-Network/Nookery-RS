@@ -5,7 +5,10 @@ mod support;
 use std::fs;
 use std::path::PathBuf;
 
-use nookery_save::composite::{KEEP_MAIL_SIZE, MAIL_SIZE, SwapDirection, swap_keep_mail};
+use nookery_save::composite::{
+    KEEP_DIARY_SIZE, KEEP_MAIL_SIZE, KEEP_ORIGINAL_SIZE, KEEP_ORIGINAL_TRAILER_OFFSET, MAIL_SIZE,
+    SwapDirection, swap_keep_diary, swap_keep_mail, swap_keep_original,
+};
 use nookery_save::{
     GciError, SaveResult, read_town_record_from_slots, read_town_record_recovering,
     write_town_record,
@@ -32,6 +35,88 @@ fn keep_mail_round_trip_preserves_synthetic_persisted_bytes() {
     swap_keep_mail(&mut bytes, SwapDirection::ToBigEndian).expect("synthetic keep-mail LE");
     assert_eq!(bytes, original);
     assert_eq!(MAIL_SIZE, 0x12A);
+}
+
+#[test]
+fn keep_original_swaps_only_c_oracle_fields() {
+    let mut bytes = vec![0u8; KEEP_ORIGINAL_SIZE];
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        *byte = (index as u8).wrapping_mul(23).wrapping_add(5);
+    }
+    let original = bytes.clone();
+    let mut expected = original.clone();
+    expected[0..2].reverse();
+    expected[2..4].reverse();
+    expected[KEEP_ORIGINAL_TRAILER_OFFSET..KEEP_ORIGINAL_TRAILER_OFFSET + 4].reverse();
+
+    swap_keep_original(&mut bytes, SwapDirection::FromBigEndian)
+        .expect("synthetic keep-original BE");
+    assert_eq!(bytes, expected);
+    swap_keep_original(&mut bytes, SwapDirection::ToBigEndian).expect("synthetic keep-original LE");
+    assert_eq!(bytes, original);
+}
+
+#[test]
+fn keep_diary_swaps_only_checksum_and_round_trips() {
+    let mut bytes = vec![0u8; KEEP_DIARY_SIZE];
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        *byte = (index as u8).wrapping_mul(29).wrapping_add(9);
+    }
+    let original = bytes.clone();
+    let mut expected = original.clone();
+    expected[0..2].reverse();
+
+    swap_keep_diary(&mut bytes, SwapDirection::FromBigEndian).expect("synthetic diary BE");
+    assert_eq!(bytes, expected);
+    swap_keep_diary(&mut bytes, SwapDirection::ToBigEndian).expect("synthetic diary LE");
+    assert_eq!(bytes, original);
+}
+
+#[test]
+fn keep_blocks_reject_truncation_and_checksum_mutations() {
+    for (size, swap) in [
+        (
+            KEEP_ORIGINAL_SIZE,
+            swap_keep_original as fn(&mut [u8], SwapDirection) -> Result<(), GciError>,
+        ),
+        (
+            KEEP_DIARY_SIZE,
+            swap_keep_diary as fn(&mut [u8], SwapDirection) -> Result<(), GciError>,
+        ),
+    ] {
+        let mut short = vec![0u8; size - 1];
+        assert_eq!(
+            swap(&mut short, SwapDirection::FromBigEndian),
+            Err(GciError::Truncated {
+                found: size - 1,
+                expected: size,
+            })
+        );
+
+        let mut block = vec![0u8; size];
+        for (index, byte) in block.iter_mut().enumerate().skip(2) {
+            *byte = (index as u8).wrapping_mul(7).wrapping_add(0x31);
+        }
+        support::seal(&mut block);
+        assert!(nookery_save::verify_block(&block));
+        // Parent-replayable invariant mutation: any persisted payload byte
+        // changed after sealing must be rejected by the C checksum rule.
+        block[size / 2] ^= 0x01;
+        assert!(!nookery_save::verify_block(&block));
+    }
+}
+
+#[test]
+fn keep_original_checksum_mutation_rejects_a_complete_record() {
+    let mut record = support::valid_record();
+    // `support::aux_modern` is relative to the payload; convert directly to
+    // the complete-record offset for the original-design block.
+    let original = nookery_save::HEADER_SIZE + support::aux_modern().original;
+    record[original + 0xCC80] ^= 0x01;
+    assert_eq!(
+        nookery_save::TownRecord::parse(&record),
+        Err(GciError::BadAuxChecksums)
+    );
 }
 
 #[test]

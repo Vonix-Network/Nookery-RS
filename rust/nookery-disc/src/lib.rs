@@ -78,6 +78,7 @@ pub mod header;
 pub mod image;
 pub mod log;
 pub mod metadata;
+pub mod rarc;
 pub mod status;
 pub mod stream_verify;
 pub mod yaz0;
@@ -92,6 +93,10 @@ pub use log::{
     VerificationState, verification_from_config, verification_log_line, verification_to_config,
 };
 pub use metadata::{CancelFlag, Cancellation, Metadata, Never, Progress, Result};
+pub use rarc::{
+    ENTRY_SIZE as RARC_ENTRY_SIZE, HEADER_SIZE as RARC_HEADER_SIZE, INFO_SIZE as RARC_INFO_SIZE,
+    MAGIC as RARC_MAGIC, NODE_SIZE as RARC_NODE_SIZE, RarcArchive, RarcError, RarcFile,
+};
 pub use status::Status;
 pub use stream_verify::{
     CISO_HEADER_SIZE, CISO_MAGIC, CISO_MIN_BLOCK_SIZE, ContainerKind, ContainerMetadata, RVZ_MAGIC,

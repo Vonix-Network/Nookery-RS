@@ -1,10 +1,11 @@
 //! C ABI adapter candidate over the `nookery-core` data-folder primitives.
 //!
-//! **This crate is not wired into the application.**  `pc/src/acgc_data.cpp`
-//! remains the default path; nothing links this library yet.  The scope is the
-//! already-portable subset: directory creation, layout enumeration, the two
-//! `pc_platform_*_path` resolvers, and migration *planning*.  Window-system
-//! handoff (`open_data_path`), the `--user-dir` override/restart bookkeeping
+//! **This crate is not wired into the production application.**
+//! `pc/src/acgc_data.cpp` remains the default path; CMake exposes a separate
+//! opt-in parity executable.  The scope is the already-portable subset:
+//! directory creation, layout enumeration, the two `pc_platform_*_path`
+//! resolvers, and migration *planning*.  Window-system handoff
+//! (`open_data_path`), the `--user-dir` override/restart bookkeeping
 //! (`set_custom_data_path`, `is_data_path_restart_pending`), and platform path
 //! discovery stay host-side and are deliberately absent.
 //!
@@ -50,7 +51,7 @@ pub use ffi::{
     nookery_data_handle_destroy, nookery_data_initialize, nookery_data_last_message,
     nookery_data_last_status, nookery_data_plan_counts, nookery_data_plan_destroy,
     nookery_data_plan_directory, nookery_data_plan_file, nookery_data_plan_migration,
-    nookery_data_root, nookery_data_status_count, nookery_data_status_message,
-    nookery_data_status_name, nookery_data_user_path,
+    nookery_data_root, nookery_data_set_cache_root, nookery_data_status_count,
+    nookery_data_status_message, nookery_data_status_name, nookery_data_user_path,
 };
 pub use handle::{DataHandle, DataPlan};

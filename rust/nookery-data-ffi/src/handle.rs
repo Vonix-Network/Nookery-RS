@@ -54,6 +54,13 @@ impl DataHandle {
         self.base_root.as_deref()
     }
 
+    pub fn set_cache_root(&mut self, cache_root: &str) -> Result<(), RawStatus> {
+        let cache_root = Path::new(cache_root);
+        validate_root(cache_root)?;
+        self.layout = DataLayout::with_cache(self.layout.root().to_path_buf(), cache_root);
+        Ok(())
+    }
+
     pub fn is_initialized(&self) -> bool {
         self.initialized
     }

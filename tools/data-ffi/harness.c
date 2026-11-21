@@ -241,6 +241,15 @@ static void test_create_rejections(const char *root) {
     CHECK_STATUS(NOOKERY_DATA_STATUS_INVALID_ARGUMENT,
                  nookery_data_handle_create(&options, &handle));
 
+    /* Oversized paths are rejected before filesystem access. */
+    char oversized[5000];
+    memset(oversized, 'x', sizeof oversized - 1);
+    oversized[0] = '/';
+    oversized[sizeof oversized - 1] = '\0';
+    options.root_utf8 = oversized;
+    CHECK_STATUS(NOOKERY_DATA_STATUS_INVALID_ARGUMENT,
+                 nookery_data_handle_create(&options, &handle));
+
     /* Destroying NULL is legal. */
     nookery_data_handle_destroy(NULL);
 }

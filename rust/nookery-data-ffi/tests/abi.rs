@@ -257,6 +257,20 @@ fn create_rejects_null_out_pointer_null_options_and_bad_layout() {
     };
     assert_eq!(status, STATUS_INVALID_ARGUMENT);
     assert!(handle.is_null());
+
+    // Oversized paths are rejected before any filesystem work.
+    let oversized = CString::new(format!("/{}", "x".repeat(4096))).expect("no NUL");
+    let status = unsafe {
+        nookery_data_handle_create(
+            &NookeryDataCreateOptions {
+                root_utf8: oversized.as_ptr(),
+                ..copy_options(&good)
+            },
+            &mut handle,
+        )
+    };
+    assert_eq!(status, STATUS_INVALID_ARGUMENT);
+    assert!(handle.is_null());
 }
 
 /// `NookeryDataCreateOptions` is not `Copy`; rebuild it field by field.
@@ -285,6 +299,32 @@ fn create_accepts_a_valid_root_and_does_no_filesystem_work() {
 #[test]
 fn destroy_accepts_null() {
     unsafe { nookery_data_handle_destroy(std::ptr::null_mut()) };
+}
+
+#[test]
+fn cache_root_can_be_injected_without_changing_the_active_root() {
+    let temp = TempDir::new("cache-injection");
+    let cache = TempDir::new("cache-injection-external");
+    let handle = make_handle(temp.path(), None);
+    let cache_text = CString::new(cache.path().to_str().expect("cache is UTF-8")).expect("no NUL");
+
+    assert_eq!(
+        unsafe { nookery_data_set_cache_root(handle, cache_text.as_ptr()) },
+        STATUS_OK
+    );
+    assert_eq!(
+        unsafe { nookery_data_initialize(handle, std::ptr::null_mut()) },
+        STATUS_OK
+    );
+    assert!(cache.path().is_dir());
+    let (status, _, reported, _) = call_path(Out::new(512), |buffer| unsafe {
+        nookery_data_directory(handle, 4, buffer)
+    });
+    assert_eq!(status, STATUS_OK);
+    assert_eq!(reported, cache.path().to_str().expect("cache is UTF-8"));
+    assert!(!temp.path().join("cache").exists());
+
+    unsafe { nookery_data_handle_destroy(handle) };
 }
 
 /* --- initialize: success, idempotence, blockers ------------------------- */

@@ -51,6 +51,7 @@ pub use alloc::{
     FamicomAllocator, MessageFlags, PC_ARENA_REQUEST_BYTES, PC_CLEANUP_SEQUENCE,
     accepts_extra_block, pc_arena_plan,
 };
+pub use core::NOT_PORTED;
 pub use exit::{
     EmulatorExit, ExitPhase, FADEOUT_FRAMES, FrameAction, HostSeam, LoadResult, PAD_COUNT,
     Platform, dispatch,
