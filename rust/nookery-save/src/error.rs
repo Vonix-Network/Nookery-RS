@@ -61,6 +61,13 @@ pub enum GciError {
     BadAuxChecksums,
     /// A caller-supplied path suffix would redirect the derived path.
     InvalidSuffix,
+    /// A bounded composite input ended before the requested field.
+    Truncated {
+        /// Bytes actually available.
+        found: usize,
+        /// Bytes required by the field or composite.
+        expected: usize,
+    },
     /// Concatenating base and suffix would exceed `PC_GCI_PATH_MAX`.
     PathTooLong,
     /// A `fileName` value is unusable as a record name.
@@ -106,6 +113,12 @@ impl fmt::Display for GciError {
             }
             GciError::BadAuxChecksums => f.write_str("auxiliary block checksums are invalid"),
             GciError::InvalidSuffix => f.write_str("path suffix is not a plain suffix"),
+            GciError::Truncated { found, expected } => {
+                write!(
+                    f,
+                    "composite input truncated: {found} of {expected} bytes available"
+                )
+            }
             GciError::PathTooLong => f.write_str("derived save path exceeds PC_GCI_PATH_MAX"),
             GciError::InvalidRecordName => f.write_str("record name is not a usable file name"),
         }

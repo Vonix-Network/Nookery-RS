@@ -56,6 +56,10 @@ name = "nookery-input"
 version = "0.1.0"
 
 [[package]]
+name = "nookery-runtime"
+version = "0.1.0"
+
+[[package]]
 name = "nookery-save"
 version = "0.1.0"
 
@@ -64,8 +68,21 @@ name = "nookery-social-model"
 version = "0.1.0"
 
 [[package]]
+name = "nookery-social-persistence"
+version = "0.1.0"
+
+[[package]]
 name = "nookery-social-proto"
 version = "0.1.0"
+
+[[package]]
+name = "nookery-social-server"
+version = "0.1.0"
+dependencies = [
+ "nookery-social-model",
+ "nookery-social-persistence",
+ "nookery-social-proto",
+]
 
 [[package]]
 name = "nookery-texture"

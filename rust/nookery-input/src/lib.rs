@@ -8,29 +8,32 @@
 //! `lib/input/names.cpp`).
 //!
 //! What is real here: the default keyboard table, the direction-splitting edit
-//! semantics, conflict detection, binding validation, and the legacy INI
-//! normalization/migration planning — each with tests that assert upstream's
-//! observable results.
+//! semantics, conflict detection, binding validation, legacy INI
+//! normalization/migration planning, and the bounded controller-port/PAD
+//! runtime — each with tests that assert upstream's observable results.
 //!
 //! What is deliberately *not* claimed:
 //!
-//! * No SDL runtime, no Aurora registration, no `input.json` serialization, no
-//!   game input path. [`ProfileStore`] is the boundary for those; [`MemoryProfiles`]
-//!   is a reference implementation, not an integration.
+//! * No live SDL runtime, Aurora layer registration, or game input hook.
+//!   [`ProfileStore`] remains the boundary for profile persistence;
+//!   [`MemoryProfiles`] and [`controller_runtime`] are deterministic adapters,
+//!   not platform integrations.
 //! * Controller defaults come from the device mapping (`detail::default_pad_bindings`
 //!   plus SDL mappings), which is adapter work and is absent here.
 //! * Controller profiles are keyed by `SourceId`; upstream matches by controller
 //!   identity (GUID/serial/vid/pid).
 //! * Game-defined controls (`aurora.binding::register_control` callers) are not
 //!   modelled; [`ControlId`] is a closed enum over `aurora.pad.*`.
-//! * `acgc::controller_ports` is a runtime concern (layers, source assignment,
-//!   `singlePortMigrated`/`autoAssignController` settings) and is not ported.
+//! * Aurora source identity matching and the SDL event layer still belong to a
+//!   parent/platform adapter; the pure port preserves assignment and hotplug
+//!   transitions without claiming that integration.
 //!
 //! Attribution: the ported logic is MIT-licensed upstream Nookery PC-layer code;
 //! see the repository root `LICENSE`.
 
 pub mod binding;
 pub mod control;
+pub mod controller_runtime;
 pub mod defaults;
 pub mod edit;
 pub mod legacy;
@@ -38,6 +41,13 @@ pub mod memory;
 mod scancode_names;
 pub mod sdl;
 pub mod store;
+
+pub use controller_runtime::{
+    ControllerPort, ControllerRuntime, ControllerSample, PAD_BUTTON_A, PAD_BUTTON_B,
+    PAD_BUTTON_DOWN, PAD_BUTTON_LEFT, PAD_BUTTON_RIGHT, PAD_BUTTON_START, PAD_BUTTON_UP,
+    PAD_BUTTON_X, PAD_BUTTON_Y, PAD_MAX_CONTROLLERS, PAD_TRIGGER_L, PAD_TRIGGER_R, PAD_TRIGGER_Z,
+    PAD0, PadError, PadStatus, PortAssignment, PortStatus, RuntimeError, SnapshotError,
+};
 
 pub use binding::{
     Binding, ConflictPolicy, HeldInput, INVALID_SOURCE, PhysicalInput, ProfileTarget, SourceId,

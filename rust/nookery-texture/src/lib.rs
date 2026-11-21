@@ -1,8 +1,9 @@
 //! Bounded texture-pack path selection for Nookery-RS.
 //!
-//! This crate ports only the source-verifiable path-selection seam from
+//! This crate ports the source-verifiable path-selection seam from
 //! `pc/include/acgc/texture_replacements.hpp:6-12` and
-//! `pc/src/acgc_texture_replacements.cpp:27-51`.
+//! `pc/src/acgc_texture_replacements.cpp:27-51`, plus bounded replacement
+//! metadata indexing.
 //!
 //! The active texture-pack directory is `<active_data_path>/texture_pack`.
 //! When that path is not a directory, selection falls back in exact order to
@@ -10,10 +11,18 @@
 //! candidate is a directory, the primary path is returned.
 //!
 //! Aurora texture registration, decoding, GPU integration, and reload
-//! semantics are explicitly unported. Those behaviors depend on
-//! `extern/aurora` and are outside this crate's bounded contract.
+//! semantics are explicitly unported. [`index_texture_pack`] stops at fixed
+//! PNG/DDS headers and returns registration metadata; those behaviors depend
+//! on `extern/aurora` and are outside this crate's bounded contract.
+
+mod index;
 
 use std::path::{Path, PathBuf};
+
+pub use index::{
+    MAX_INDEXED_ENTRIES, TextureFormat, TextureIndex, TextureIndexError, TextureIndexStats,
+    TextureRegistration, index_texture_pack,
+};
 
 /// Resolves the active texture-pack directory according to the bounded C++
 /// path-selection seam.
@@ -26,21 +35,44 @@ use std::path::{Path, PathBuf};
 #[must_use]
 pub fn resolve_texture_pack_path(active_data_path: &Path, cwd: &Path, base_path: &Path) -> PathBuf {
     let primary = active_data_path.join("texture_pack");
-    if primary.is_dir() {
+    if is_real_directory(&primary) {
         return primary;
     }
 
     let cwd_fallback = cwd.join("texture_pack");
-    if cwd_fallback.is_dir() {
+    if is_real_directory(&cwd_fallback) {
         return cwd_fallback;
     }
 
     let base_fallback = base_path.join("texture_pack");
-    if base_fallback.is_dir() {
+    if is_real_directory(&base_fallback) {
         return base_fallback;
     }
 
     primary
+}
+
+fn is_real_directory(path: &Path) -> bool {
+    if has_symlink_component(path) {
+        return false;
+    }
+    std::fs::symlink_metadata(path)
+        .map(|metadata| !metadata.file_type().is_symlink() && metadata.is_dir())
+        .unwrap_or(false)
+}
+
+fn has_symlink_component(path: &Path) -> bool {
+    let mut current = PathBuf::new();
+    for component in path.components() {
+        current.push(component);
+        if std::fs::symlink_metadata(&current)
+            .map(|metadata| metadata.file_type().is_symlink())
+            .unwrap_or(false)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]

@@ -119,7 +119,7 @@ impl NookeryDataDirReport {
 ///
 /// # Safety
 /// `options` must be null or a valid `NookeryDataCreateOptions`; `out_handle`
-/// must be null or point to writable storage; string fields follow [`required_str`].
+/// must be null or point to writable storage; string fields follow `required_str`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nookery_data_handle_create(
     options: *const NookeryDataCreateOptions,

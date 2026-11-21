@@ -10,6 +10,8 @@
 //! * `parse_xxh3_128` and streaming `XXH3_128bits_*` — [`hash`];
 //! * `open_and_inspect` / `verify_owned_stream` classification and hashing
 //!   order — [`engine`];
+//! * bounded RVZ/CISO metadata inspection and raw ISO/GCM file verification —
+//!   [`stream_verify`];
 //! * `validation_error` status mapping and the launch gate — [`error`];
 //! * the `log_verification_state` line and `verification_to_config` /
 //!   `verification_from_config` round trip — [`log`].
@@ -41,6 +43,9 @@
 //! An adapter that cannot decode a container must return
 //! [`image::ImageError::Format`]; hashing compressed bytes would misreport a
 //! valid image as [`ValidationError::HashMismatch`].
+//! [`stream_verify::verify_path`] makes this boundary explicit for RVZ/CISO by
+//! returning `Status::Failed` with a decoder-unavailable diagnostic after
+//! bounded header/index inspection.
 //!
 //! Also out of scope, because no source evidence establishes them as pure
 //! catalog operations: the prelaunch UI state machine, settings persistence
@@ -74,6 +79,7 @@ pub mod image;
 pub mod log;
 pub mod metadata;
 pub mod status;
+pub mod stream_verify;
 
 pub use catalog::{AcceptedDisc, Catalog, UPSTREAM};
 pub use engine::{HASH_BUFFER_SIZE, inspect, inspect_error, verify, verify_simple};
@@ -86,3 +92,7 @@ pub use log::{
 };
 pub use metadata::{CancelFlag, Cancellation, Metadata, Never, Progress, Result};
 pub use status::Status;
+pub use stream_verify::{
+    CISO_HEADER_SIZE, CISO_MAGIC, CISO_MIN_BLOCK_SIZE, ContainerKind, ContainerMetadata, RVZ_MAGIC,
+    StreamVerifyError, inspect_path, inspect_stream, verify_path,
+};

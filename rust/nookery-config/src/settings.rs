@@ -411,7 +411,7 @@ impl Settings {
     /// above the maximum become the maximum.
     ///
     /// Numeric enum values are rejected here: the enum codec is runtime-owned, so
-    /// such values must go through [`crate::migration`] first.
+    /// such values must go through `crate::migration` first.
     pub fn set(&mut self, key: &str, value: SettingValue) -> Result<(), SettingsError> {
         match key {
             "backend.discPath" => {

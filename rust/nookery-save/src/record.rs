@@ -177,13 +177,24 @@ impl TownRecord {
 fn select_save_copy(payload: &[u8]) -> Result<(usize, u16), GciError> {
     for copy in 0..2usize {
         let start = SAVE_MAIN_OFFSET + copy * SAVE_SIZE;
-        let block = &payload[start..start + SAVE_SIZE];
-        let version =
-            i32::from_be_bytes(block[SAVE_CHECK_VERSION_OFFSET..][..4].try_into().unwrap());
-        let code = u32::from_be_bytes(block[SAVE_CHECK_CODE_OFFSET..][..4].try_into().unwrap());
-        let check_id =
-            u16::from_be_bytes(block[SAVE_CHECK_LAND_ID_OFFSET..][..2].try_into().unwrap());
-        let land_id = u16::from_be_bytes(block[LAND_INFO_ID_OFFSET..][..2].try_into().unwrap());
+        let Some(block) = payload.get(start..start + SAVE_SIZE) else {
+            return Err(GciError::TruncatedPayload {
+                found: payload.len(),
+                expected: start + SAVE_SIZE,
+            });
+        };
+        let Some(version) = read_be_i32(block, SAVE_CHECK_VERSION_OFFSET) else {
+            continue;
+        };
+        let Some(code) = read_be_u32(block, SAVE_CHECK_CODE_OFFSET) else {
+            continue;
+        };
+        let Some(check_id) = read_be_u16(block, SAVE_CHECK_LAND_ID_OFFSET) else {
+            continue;
+        };
+        let Some(land_id) = read_be_u16(block, LAND_INFO_ID_OFFSET) else {
+            continue;
+        };
         if (version == SAVE_VERSION_LEGACY || version == SAVE_VERSION_CURRENT)
             && code == SAVE_ID
             && check_id & LAND_ID_MASK == LAND_ID_BITMASK
@@ -199,11 +210,11 @@ fn select_save_copy(payload: &[u8]) -> Result<(usize, u16), GciError> {
 /// Port of `pc_gci_aux_offsets`: probe the auxiliary order from the mail
 /// block's land id, then validate checksums for both candidate orderings.
 fn aux_layout(payload: &[u8], land_id: u16) -> Result<AuxLayout, GciError> {
-    let first_land_id = u16::from_be_bytes(
-        payload[KEEP_MAIL_LANDID_OFFSET..KEEP_MAIL_LANDID_OFFSET + 2]
-            .try_into()
-            .unwrap(),
-    );
+    let first_land_id =
+        read_be_u16(payload, KEEP_MAIL_LANDID_OFFSET).ok_or(GciError::TruncatedPayload {
+            found: payload.len(),
+            expected: KEEP_MAIL_LANDID_OFFSET + 2,
+        })?;
     let prefer_legacy = first_land_id != land_id;
 
     for attempt in 0..2 {
@@ -241,11 +252,25 @@ fn aux_layout(payload: &[u8], land_id: u16) -> Result<AuxLayout, GciError> {
             .all(|block| {
                 let start = layout.offset(block);
                 let end = start + AuxLayout::size(block);
-                end <= OTHERS_SIZE && checksum::verify_block(&payload[start..end])
+                end <= OTHERS_SIZE && payload.get(start..end).is_some_and(checksum::verify_block)
             });
         if blocks_ok {
             return Ok(layout);
         }
     }
     Err(GciError::BadAuxChecksums)
+}
+
+fn read_be_u16(bytes: &[u8], offset: usize) -> Option<u16> {
+    let pair = bytes.get(offset..offset + 2)?;
+    Some(u16::from_be_bytes([pair[0], pair[1]]))
+}
+
+fn read_be_u32(bytes: &[u8], offset: usize) -> Option<u32> {
+    let word = bytes.get(offset..offset + 4)?;
+    Some(u32::from_be_bytes([word[0], word[1], word[2], word[3]]))
+}
+
+fn read_be_i32(bytes: &[u8], offset: usize) -> Option<i32> {
+    read_be_u32(bytes, offset).map(|value| i32::from_be_bytes(value.to_be_bytes()))
 }

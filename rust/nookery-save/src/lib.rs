@@ -41,8 +41,10 @@
 #![deny(missing_docs)]
 
 pub mod checksum;
+pub mod composite;
 pub mod dir;
 pub mod error;
+pub mod io;
 pub mod layout;
 pub mod path;
 pub mod record;
@@ -51,6 +53,7 @@ pub mod typed_swap;
 pub use checksum::{checksum_be, verify_block};
 pub use dir::{CardDir, FILE_NAME_MAX, HEADER_SIZE};
 pub use error::{GciError, SaveResult};
+pub use io::{read_town_record_from_slots, read_town_record_recovering, write_town_record};
 pub use layout::{
     BLOCK_SIZE, FILE_DATA_SIZE, RECORD_SIZE, SAVE_BACK_OFFSET, SAVE_MAIN_OFFSET, SAVE_SIZE,
     TOWN_BLOCK_COUNT, TOWN_FILE_NAME,

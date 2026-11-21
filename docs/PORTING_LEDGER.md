@@ -48,7 +48,7 @@ Highest-risk-for-correctness slice: user saves must round-trip.
 |---|---|
 | **Target** | `rust/nookery-save` + primitive `rust/nookery-bswap` first; `pc/src/pc_gci.c`, `pc/src/pc_save_bswap.c`, `pc/include/pc_gci.h`, `pc_save_bswap.h` remain the oracle |
 | **Slices** | (a) GCI header (`CARDDir`, 0x2000 blocks, rotation suffixes); (b) five typed `#[repr(C)]` LE↔BE leaf mirrors; (c) Mail name/header/content swaps; (d) composite `Save_t`/ARAM LE↔BE swap; (e) card A/B directory resolution |
-| **Gate — current candidate** | GCI directory/record/checksum validation and bounded path/read tests pass; primitive endian/bitfield repackers match their C oracle; five typed save-byte-swap leaf mirrors plus Mail name/header/content swaps pass 52 save tests, including size/alignment and round-trip vectors; this does not yet prove composite `Save_t`/quest/ARAM byteswap or card I/O parity. |
+| **Gate — current candidate** | GCI directory/record/checksum validation, primitive endian/bitfield repackers, five typed save-byte-swap leaf mirrors, Mail swaps, bounded composite `Save_t`/keep-mail walkers, recovery/rotation precedence, and staged synthetic writes pass 59 save tests; full remaining `Save_t`/quest/ARAM/card-manager parity is still open. |
 | **Gate — round-trip** | For N real `.gci` files (user-supplied, never committed): C reads → Rust byteswaps → C reads must produce identical `Save_t`; and Rust write → C read → Rust read is stable. Any byte diff fails |
 | **Gate — failure modes** | `pc_save_result` states `PC_SAVE_MISSING` / `PC_SAVE_INVALID` / `PC_SAVE_IO_ERROR` reproduced for truncated, wrong-hash, and unreadable files |
 | **Gate — regression** | Existing C save path still loads a previously saved village (the C oracle is unchanged) |
@@ -62,7 +62,7 @@ Frozen on-disk and in-memory contracts.
 |---|---|
 | **Target** | `rust/nookery-config` and bounded `rust/nookery-input` first; `pc/src/acgc_settings.cpp`, `pc/include/pc_settings.h`, `pc/src/acgc_input_profiles.cpp`, `src/padmgr.c` remain the oracle |
 | **Slices** | (a) `PCSettings` field order + `config.json` codec keys; (b) keyboard/gamepad default maps; (c) direction editing, conflict validation, and legacy migration; (d) live deadzone/PADStatus math |
-| **Gate — current candidate** | Scalar defaults/ranges, Borealis-style constraints, legacy INI import, JSON migration, exact input defaults, direction editing, conflict validation, SDL-name translation, and malformed-input handling pass 23 config plus 37 input tests. Real-install round-trip, live SDL/Aurora/PADStatus behavior, controller-port integration, and C ABI parity are not yet proven. |
+| **Gate — current candidate** | Scalar defaults/ranges, Borealis-style constraints, legacy INI import, JSON migration, exact input defaults, direction editing, conflict validation, SDL-name translation, controller ports, PAD masks, deadzone/threshold math, hotplug, snapshot bounds, and malformed-input handling pass 23 config plus 45 input tests. Real-install round-trip, live SDL/Aurora/PADStatus behavior, and C ABI parity are not yet proven. |
 | **Gate — config** | Round-trip an existing `config.json` and `settings.ini` from a real install: every key and value preserved; unknown keys retained, not dropped |
 | **Gate — input** | Same controller input sequence yields identical `PADStatus` bytes from C and Rust across the deadzone boundary (0, at-threshold, above-threshold) |
 | **Gate — platform** | Touch-control layouts on Android/iOS still render and the layout editor still saves |
@@ -101,7 +101,7 @@ Third-party emulator; integrate, do not rewrite.
 |---|---|
 | **Target** | `pc/src/acgc_disc.cpp`, `pc/src/acgc_texture_replacements.cpp`, asset pipeline; bounded seams in `rust/nookery-disc` and `rust/nookery-texture` |
 | **Slices** | (a) accepted-disc catalog + xxh3-128 check; (b) exact texture-pack primary/cwd/base-relative path selection; (c) HD texture pack indexing |
-| **Gate — current candidate** | Rust catalog/header/hash classification and bounded read/error behavior pass 52 tests; texture path precedence and non-directory handling pass 6 tests; no successful Aurora RVZ/ISO/CISO/GCM decode, texture registration, or user-path launch is claimed. |
+| **Gate — current candidate** | Rust catalog/header/hash classification, bounded RVZ/CISO metadata inspection, raw ISO/GCM stream verification, and bounded read/error behavior pass 52 disc tests; texture path precedence, non-directory handling, and deterministic PNG/DDS indexing pass 10 texture tests; no successful Aurora RVZ/ISO/CISO/GCM decode, texture registration, or user-path launch is claimed. |
 | **Gate** | All four image formats (RVZ, ISO, CISO, GCM) accepted; wrong-hash disc rejected with the same error; texture replacement for a known pack resolves identically |
 | **Constraint** | Never ship a disc image or extracted assets; tests use user-supplied input or a synthetic hash fixture |
 
@@ -132,7 +132,7 @@ This is a separate R3 feature track in addition to the 1:1 Rust port. It must ad
 
 | Item | Current state / required evidence |
 |---|---|
-| **Status** | **Bounded candidates integrated — source and security architecture advisories complete**; `nookery-social-proto` and `nookery-social-model` pass their local gates, but no network server, authentication, persistence, client integration, or deployed service exists in the current tree |
+| **Status** | **Bounded candidates integrated — source and security architecture advisories complete**; `nookery-social-proto`, `nookery-social-model`, `nookery-social-persistence`, and `nookery-social-server` pass local gates for offline/local behavior, but no network transport, authentication, client/game integration, or deployed service exists in the current tree |
 | **Required surface** | Hosted towns, session discovery/join/leave, host/resident/visitor permissions, synchronized gameplay state, persistence/checkpoints, reconnect/recovery, and a client integration path through the real frame/input/save boundaries |
 | **Required gates** | Runnable client/server vertical slice; deterministic multi-client simulation; authorization and hostile-packet negative tests; crash-safe persistence/recovery; reconnect and duplicate-delivery tests; offline regression; platform/user-path checks; no asset or proprietary-protocol dependency |
 | **Acceptance boundary** | Architecture prose or a compiling server crate is not completion. Acceptance requires an exercised hosted-town user path with exact candidate identity, fresh security gates, and separately authorized deployment/effect records |
@@ -155,13 +155,13 @@ An optimization is accepted only with a row here showing the metric, the before/
 |---|---|---|
 | 0 | Baseline pin + crate tests | **Partial — host CMake gate blocked** |
 | 1 | Data-folder C ABI + parity harness | **Candidate — ABI + Rust/C harness pass; C++ parity and CMake linkage unproven** |
-| 2 | Save/GCI + byteswap | **Candidate — GCI validator + primitive bswap + typed leaf/Mail slices; composite `Save_t`/quest/ARAM/card I/O parity not started** |
-| 3 | Settings + input | **Candidate — settings model + bounded input profile/legacy slice; live SDL/PADStatus/controller integration not started** |
+| 2 | Save/GCI + byteswap | **Candidate — GCI validator + primitive bswap + typed leaf/Mail + bounded composite/recovery/write slices; remaining `Save_t`/quest/ARAM/card-manager parity open** |
+| 3 | Settings + input | **Candidate — settings model + bounded profile/legacy/controller/PAD runtime slice; live SDL/PADStatus wiring and C parity open** |
 | 4 | Allocator / arenas | **Candidate — bounded model + fixed-seed C parity; runtime ABI and workload gates not started** |
 | 5 | Famicom boundary | **Candidate — host seam plus bounded native mapper-0/synthetic-6502 runtime; full emulator/fixNES, visual/audio parity, and application activation remain open** |
-| 6 | Disc + content | **Candidate — catalog/header/hash + texture path seams; Aurora format decoding, texture runtime, indexing, and user path not started** |
+| 6 | Disc + content | **Candidate — catalog/header/hash + bounded RVZ/CISO/raw stream verification + texture path/index seams; Aurora format decoding, texture runtime, and user path open** |
 | 7 | UI + platform services | Not started |
 | 8 | Boot + integration | Not started |
-| 9 | Hosted-town multiplayer | **Candidate — bounded clean-room frame codec + authority model; server, persistence, auth, reconnect, client/game integration, and multi-client runtime not started** |
+| 9 | Hosted-town multiplayer | **Candidate — bounded clean-room frame codec + authority model + local persistence/server vertical slice; transport, auth, reconnect over real clients, client/game integration, and multi-client runtime remain open** |
 
 “Candidate” means the primitive exists and passes its own unit tests; it does **not** mean the user path is ported. See [`PORTING_RUST.md`](./PORTING_RUST.md) for the measured evidence behind each row.
