@@ -6,7 +6,7 @@ Owner directive: **finish the complete Rust port** and the separately tracked cl
 
 - Repository: `Vonix-Network/Nookery-RS`, upstream: `flyngmt/Nookery`.
 - Bootstrap ancestor: `03ff4a17f7f1fa1cc083b6e7c3a0ff21927bb15e`.
-- Current Rust workspace: 15 bounded crates, 139 tracked Rust-workspace files, 32,360 lines.
+- Current Rust workspace: 15 bounded crates, 139 tracked Rust-workspace files, 32,514 lines.
 - Remaining oracle surface: 5,885 tracked C/C++ header/source files, approximately 1,004,742 lines.
 - CMake application configure is currently blocked on this host by missing X11/Wayland development libraries; this remains an environment blocker, not a port completion claim.
 
