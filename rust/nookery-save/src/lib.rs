@@ -46,6 +46,7 @@ pub mod dir;
 pub mod error;
 pub mod io;
 pub mod layout;
+pub mod manager;
 pub mod path;
 pub mod record;
 pub mod typed_swap;
@@ -57,6 +58,23 @@ pub use io::{read_town_record_from_slots, read_town_record_recovering, write_tow
 pub use layout::{
     BLOCK_SIZE, FILE_DATA_SIZE, RECORD_SIZE, SAVE_BACK_OFFSET, SAVE_MAIN_OFFSET, SAVE_SIZE,
     TOWN_BLOCK_COUNT, TOWN_FILE_NAME,
+};
+pub use manager::{
+    AramBlocks, BIRTHDAY_ACTIVE_FLAG, CARD_SLOT_A, CARD_SLOT_B, CardManager, CardManagerError,
+    DIARY_ENTRY_COUNT, DIARY_ENTRY_SIZE, DIARY_PAGE_COUNT, EMPTY_ITEM, KEEP_MAIL_COUNT,
+    KEEP_PAGE_COUNT, MAIL_SIZE, ORIGINAL_DESIGN_SIZE, PC_CARD_TOWN_MAX, PC_GCI_FILENAME,
+    PC_GCI_PATH_MAX, PC_GCI_PREFIXED_FILENAME, POCKET_COUNT, PreWriteState, PrivateState,
+    SavePaths, SaveScan, TownEntry, TownIdentity, WISP_FIRST, WISP_LAST, aram_offsets,
+    mCD_save_data_aram_malloc, mCD_save_data_aram_to_main, mCD_save_data_main_to_aram,
+    mCD_set_aram_save_data, manager_layout, pc_card_b_collect_town, pc_card_b_find_town,
+    pc_card_b_is_legacy_town, pc_card_b_refresh_towns, pc_card_b_scan_town_files,
+    pc_card_b_select_town, pc_card_b_town, pc_card_b_town_base, pc_card_b_town_count,
+    pc_card_count_town, pc_card_find_town, pc_card_scan_towns, pc_card_take_first_town,
+    pc_check_reset_code, pc_ensure_save_dirs, pc_fix_zeroed_original_entries,
+    pc_get_land_copy_protect, pc_init_aram_block, pc_init_diary_entries, pc_init_mail_entries,
+    pc_init_original_entries, pc_save_check_and_load, pc_save_find_and_load,
+    pc_save_migrate_legacy, pc_save_pre_write_side_effects, pc_save_scan_gci_dir,
+    pc_save_write_gci_to, pc_set_reset_code,
 };
 pub use path::{
     DEFAULT_FILE_NAME, PATH_MAX, PENDING_SUFFIXES, ROTATION_SUFFIXES, recovery_candidates,
