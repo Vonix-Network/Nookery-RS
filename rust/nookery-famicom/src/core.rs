@@ -941,7 +941,9 @@ impl Cpu {
                 self.set_zn(self.x);
                 2
             }
-            0xea => 2,
+            // fixNES maps these six unofficial one-byte NOPs to its direct
+            // read path, which consumes two cycles and performs no action.
+            0x1a | 0x3a | 0x5a | 0x7a | 0xda | 0xea | 0xfa => 2,
             0xf8 => {
                 self.p |= FLAG_DECIMAL;
                 2

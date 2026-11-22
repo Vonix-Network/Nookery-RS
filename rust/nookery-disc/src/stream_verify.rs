@@ -73,8 +73,8 @@ pub const CISO_MAGIC: [u8; 4] = *b"CISO";
 pub const CISO_HEADER_SIZE: usize = ciso::HEADER_SIZE;
 /// Number of GameCube/Wii CISO map bytes.
 pub const CISO_MAP_SIZE: usize = ciso::MAP_SIZE;
-/// Minimum CISO block size supported by the on-disk format.
-pub const CISO_MIN_BLOCK_SIZE: u32 = ciso::GAMECUBE_BLOCK_SIZE;
+/// Minimum CISO block alignment supported by the on-disk format.
+pub const CISO_MIN_BLOCK_SIZE: u32 = ciso::CISO_MIN_BLOCK_SIZE;
 
 /// Metadata obtained without decoding or loading a container into memory.
 #[derive(Clone, Debug, PartialEq, Eq)]

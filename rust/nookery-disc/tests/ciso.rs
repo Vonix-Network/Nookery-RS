@@ -14,12 +14,16 @@ use nookery_disc::{
 const BLOCK: usize = GAMECUBE_BLOCK_SIZE as usize;
 
 fn ciso(map: &[u8], blocks: &[&[u8]]) -> Vec<u8> {
+    ciso_with_block_size(BLOCK, map, blocks)
+}
+
+fn ciso_with_block_size(block_size: usize, map: &[u8], blocks: &[&[u8]]) -> Vec<u8> {
     let mut source = vec![0u8; CISO_HEADER_SIZE];
     source[..4].copy_from_slice(b"CISO");
-    source[4..8].copy_from_slice(&(BLOCK as u32).to_le_bytes());
+    source[4..8].copy_from_slice(&(block_size as u32).to_le_bytes());
     source[8..8 + map.len()].copy_from_slice(map);
     for block in blocks {
-        assert_eq!(block.len(), BLOCK);
+        assert_eq!(block.len(), block_size);
         source.extend_from_slice(block);
     }
     source
@@ -94,6 +98,44 @@ fn ciso_logical_size_and_sector_mapping_match_independent_calculation() {
         &tail[..3],
         &reference_read(&source, &map, tail_offset, 8)[..]
     );
+}
+
+#[test]
+fn ciso_tail_length_and_offset_are_mutation_sensitive() {
+    let block_size = 0x400000usize;
+    let logical_blocks = GAMECUBE_LOGICAL_SIZE.div_ceil(block_size as u64) as usize;
+    let mut first = vec![0u8; block_size];
+    first[..6].copy_from_slice(b"GAFE01");
+    first[28..32].copy_from_slice(&[0xc2, 0x33, 0x9f, 0x3d]);
+    let mut final_block = vec![0u8; block_size];
+    let tail = GAMECUBE_LOGICAL_SIZE as usize % block_size;
+    for (index, byte) in final_block[..tail].iter_mut().enumerate() {
+        *byte = (index as u8).wrapping_mul(3).wrapping_add(1);
+    }
+    let mut map = vec![0u8; logical_blocks];
+    map[0] = 1;
+    map[logical_blocks - 1] = 1;
+    let source = ciso_with_block_size(block_size, &map, &[&first, &final_block]);
+    let mut reader = Cursor::new(source.clone());
+    let mut image = CisoImage::open(&mut reader).expect("valid CISO");
+
+    let offset = GAMECUBE_LOGICAL_SIZE as usize - tail + 17;
+    let length = tail - 17 + 9;
+    let mut actual = vec![0xa5; length];
+    assert_eq!(
+        image
+            .read_at(offset as u64, &mut actual)
+            .expect("bounded final-block read"),
+        tail - 17
+    );
+    assert_eq!(&actual[..tail - 17], &final_block[17..tail]);
+    assert!(actual[tail - 17..].iter().all(|&byte| byte == 0xa5));
+
+    let mut shifted = vec![0u8; 4];
+    image
+        .read_at((offset + 1) as u64, &mut shifted)
+        .expect("shifted final-block read");
+    assert_eq!(&shifted, &final_block[18..22]);
 }
 
 #[test]

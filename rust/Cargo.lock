@@ -19,6 +19,14 @@ name = "nookery-arena"
 version = "0.1.0"
 
 [[package]]
+name = "nookery-audio"
+version = "0.1.0"
+
+[[package]]
+name = "nookery-boot"
+version = "0.1.0"
+
+[[package]]
 name = "nookery-bswap"
 version = "0.1.0"
 
@@ -52,12 +60,23 @@ name = "nookery-famicom"
 version = "0.1.0"
 
 [[package]]
+name = "nookery-game"
+version = "0.1.0"
+
+[[package]]
+name = "nookery-graph"
+version = "0.1.0"
+
+[[package]]
 name = "nookery-input"
 version = "0.1.0"
 
 [[package]]
 name = "nookery-runtime"
 version = "0.1.0"
+dependencies = [
+ "nookery-game",
+]
 
 [[package]]
 name = "nookery-save"

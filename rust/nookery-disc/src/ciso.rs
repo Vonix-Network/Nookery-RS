@@ -24,8 +24,11 @@ pub const DATA_OFFSET: u64 = HEADER_SIZE as u64;
 pub const GAMECUBE_BLOCK_SIZE: u32 = 0x20_0000;
 /// Fixed GameCube logical disc size returned by `nod_disc_size` for CISO.
 pub const GAMECUBE_LOGICAL_SIZE: u64 = 0x5705_8000;
-/// Number of CISO map blocks covering [`GAMECUBE_LOGICAL_SIZE`].
+/// Number of CISO map blocks covering [`GAMECUBE_LOGICAL_SIZE`] at the
+/// default [`GAMECUBE_BLOCK_SIZE`].
 pub const GAMECUBE_LOGICAL_BLOCKS: usize = 697;
+/// Smallest valid CISO block alignment, matching NOD's sector-size check.
+pub const CISO_MIN_BLOCK_SIZE: u32 = 0x800;
 
 /// Why a CISO header or block read was rejected.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,7 +40,8 @@ pub enum CisoError {
     },
     /// The first four bytes were not `CISO`.
     WrongMagic,
-    /// The block size is not the GameCube CISO block size.
+    /// The block size is zero, not sector-aligned, or cannot cover the logical
+    /// GameCube extent within the CISO map.
     InvalidBlockSize {
         /// Block size read from the header.
         block_size: u32,
@@ -97,7 +101,7 @@ impl std::error::Error for CisoError {}
 pub struct CisoMetadata {
     /// Little-endian block size from offset four.
     pub block_size: u32,
-    /// Logical block count covering the fixed GameCube extent.
+    /// Logical block count covering the fixed GameCube extent at this block size.
     pub logical_blocks: u64,
     /// Number of present blocks packed in the source.
     pub present_blocks: u64,
@@ -134,13 +138,23 @@ impl<'a, R: Read + Seek> CisoImage<'a, R> {
                 .try_into()
                 .expect("fixed CISO block-size field"),
         );
-        if block_size != GAMECUBE_BLOCK_SIZE {
+        if block_size == 0 || block_size % CISO_MIN_BLOCK_SIZE != 0 {
+            return Err(CisoError::InvalidBlockSize { block_size });
+        }
+
+        let logical_blocks = GAMECUBE_LOGICAL_SIZE
+            .checked_add(u64::from(block_size) - 1)
+            .ok_or(CisoError::Overflow)?
+            / u64::from(block_size);
+        let logical_blocks_usize =
+            usize::try_from(logical_blocks).map_err(|_| CisoError::Overflow)?;
+        if logical_blocks_usize > MAP_SIZE {
             return Err(CisoError::InvalidBlockSize { block_size });
         }
 
         let map = header[8..].to_vec();
         let mut present_blocks = 0u64;
-        for (index, &value) in map[..GAMECUBE_LOGICAL_BLOCKS].iter().enumerate() {
+        for (index, &value) in map[..logical_blocks_usize].iter().enumerate() {
             match value {
                 0 => {}
                 1 => {
@@ -152,7 +166,6 @@ impl<'a, R: Read + Seek> CisoImage<'a, R> {
         if map[0] == 0 {
             return Err(CisoError::MissingHeaderBlock);
         }
-        let logical_blocks = GAMECUBE_LOGICAL_BLOCKS as u64;
         let logical_size = GAMECUBE_LOGICAL_SIZE;
         let packed_size = present_blocks
             .checked_mul(u64::from(block_size))

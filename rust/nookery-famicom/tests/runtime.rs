@@ -462,6 +462,56 @@ fn unsupported_cpu_opcode_is_a_typed_gap() {
 }
 
 #[test]
+fn unofficial_nop_family_matches_two_cycle_nop_without_changing_cpu_state() {
+    let family = [0x1a, 0x3a, 0x5a, 0x7a, 0xda, 0xfa];
+    let official = [0xea; 6];
+    let suffix = [
+        0x85, 0x20, // STA $20: capture A
+        0x86, 0x21, // STX $21: capture X
+        0x84, 0x22, // STY $22: capture Y
+        0x08, // PHP
+        0x68, // PLA: capture P through A
+        0x85, 0x23, // STA $23
+        0x4c, 0x00, 0x80, // stable loop
+    ];
+    let mut family_program = vec![
+        0xa9, 0x81, // LDA #$81
+        0xa2, 0x37, // LDX #$37
+        0xa0, 0x42, // LDY #$42
+        0x38, // SEC
+        0xf8, // SED
+        0x78, // SEI
+    ];
+    family_program.extend(family);
+    family_program.extend(suffix);
+    let mut official_program = vec![
+        0xa9, 0x81, // LDA #$81
+        0xa2, 0x37, // LDX #$37
+        0xa0, 0x42, // LDY #$42
+        0x38, // SEC
+        0xf8, // SED
+        0x78, // SEI
+    ];
+    official_program.extend(official);
+    official_program.extend(suffix);
+
+    let family_image = RomImage::parse(fixture_rom(&family_program)).expect("family fixture");
+    let official_image =
+        RomImage::parse(fixture_rom(&official_program)).expect("official NOP fixture");
+    let mut family_core = NesCore::new(&family_image);
+    let mut official_core = NesCore::new(&official_image);
+    let family_frame = family_core.frame().expect("unofficial NOPs are supported");
+    let official_frame = official_core.frame().expect("official NOPs are supported");
+
+    assert_eq!(family_frame.cpu_cycles, official_frame.cpu_cycles);
+    assert_eq!(
+        &family_core.ram()[0x20..0x24],
+        &official_core.ram()[0x20..0x24]
+    );
+    assert_eq!(&family_core.ram()[0x20..0x24], &[0x81, 0x37, 0x42, 0x3d]);
+}
+
+#[test]
 fn invalid_and_unsupported_roms_fail_before_core_creation() {
     let id = RomId::new(0).expect("catalog id");
     let mut runtime = FamicomRuntime::new_pc();

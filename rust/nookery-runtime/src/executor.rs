@@ -1,4 +1,6 @@
 use crate::error::{CallbackKind, RuntimeError};
+use nookery_game::ExecutorPlan;
+use std::cell::Cell;
 
 type Hook = Box<dyn FnMut() -> Result<(), RuntimeError>>;
 type UnresolvedHook = Box<dyn FnMut(UnresolvedReport) -> Result<(), RuntimeError>>;
@@ -80,26 +82,73 @@ impl Executor {
     }
 
     pub fn prolog(&mut self) -> Result<ExecutorReport, ExecutorError> {
-        let mut report = ExecutorReport::default();
-        if !self.construct_skip {
-            for constructor in &mut self.constructors {
-                constructor().map_err(|_| ExecutorError::Callback(CallbackKind::Constructor))?;
-                report.constructors_run += 1;
-            }
-        }
         let main = self.main.as_mut().ok_or(ExecutorError::MissingMain)?;
-        main().map_err(|_| ExecutorError::Callback(CallbackKind::Main))?;
-        report.main_run = true;
-        Ok(report)
+        let error = Cell::new(None);
+        let constructors_run = Cell::new(0);
+        let main_run = Cell::new(false);
+        let error_ref = &error;
+        let main_run_ref = &main_run;
+        let mut plan = ExecutorPlan::new(move || {
+            if error_ref.get().is_none() {
+                if main().is_err() {
+                    error_ref.set(Some(ExecutorError::Callback(CallbackKind::Main)));
+                } else {
+                    main_run_ref.set(true);
+                }
+            }
+        });
+        for constructor in &mut self.constructors {
+            let error_ref = &error;
+            let constructors_run_ref = &constructors_run;
+            plan = plan.constructor(move || {
+                if error_ref.get().is_none() {
+                    if constructor().is_err() {
+                        error_ref.set(Some(ExecutorError::Callback(CallbackKind::Constructor)));
+                    } else {
+                        constructors_run_ref.set(constructors_run_ref.get() + 1);
+                    }
+                }
+            });
+        }
+        plan.run(self.construct_skip);
+        if let Some(error) = error.get() {
+            Err(error)
+        } else {
+            Ok(ExecutorReport {
+                constructors_run: constructors_run.get(),
+                main_run: main_run.get(),
+                destructors_run: 0,
+            })
+        }
     }
 
     pub fn epilog(&mut self) -> Result<ExecutorReport, ExecutorError> {
-        let mut report = ExecutorReport::default();
+        let error = Cell::new(None);
+        let destructors_run = Cell::new(0);
+        let mut plan = ExecutorPlan::new(|| {});
         for destructor in &mut self.destructors {
-            destructor().map_err(|_| ExecutorError::Callback(CallbackKind::Destructor))?;
-            report.destructors_run += 1;
+            let error_ref = &error;
+            let destructors_run_ref = &destructors_run;
+            plan = plan.destructor(move || {
+                if error_ref.get().is_none() {
+                    if destructor().is_err() {
+                        error_ref.set(Some(ExecutorError::Callback(CallbackKind::Destructor)));
+                    } else {
+                        destructors_run_ref.set(destructors_run_ref.get() + 1);
+                    }
+                }
+            });
         }
-        Ok(report)
+        plan.run(true);
+        if let Some(error) = error.get() {
+            Err(error)
+        } else {
+            Ok(ExecutorReport {
+                constructors_run: 0,
+                main_run: false,
+                destructors_run: destructors_run.get(),
+            })
+        }
     }
 
     pub fn unresolved(&mut self, frames: &[StackFrame]) -> Result<(), ExecutorError> {

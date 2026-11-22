@@ -49,6 +49,7 @@ mod tests {
         AudioAdapter, AudioSchedule, Executor, HostErrorCode, Lifecycle, LifecycleState,
         PlatformAdapter, RendererAdapter, Runtime, RuntimeError,
     };
+    use nookery_game::FrameClock;
 
     #[derive(Clone)]
     struct TestPlatform {
@@ -259,6 +260,94 @@ mod tests {
         assert_eq!(report.audio_ticks, 4);
         assert_eq!(runtime.snapshot().graph.dt_num_60fps_frames, 4.0);
         assert_eq!(runtime.snapshot().audio_accumulator, 0.0);
+    }
+
+    #[test]
+    fn runtime_uses_game_frame_clock_and_executor_order() {
+        let (mut runtime, events) = runtime(false, false);
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_game_init(move |_| {
+            callback_events.borrow_mut().push("game_init");
+            Ok(())
+        });
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_update(move |_, _| {
+            callback_events.borrow_mut().push("update");
+            Ok(())
+        });
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_game_cleanup(move |_| {
+            callback_events.borrow_mut().push("game_cleanup");
+            Ok(())
+        });
+
+        runtime.boot().unwrap();
+        let first = runtime.run_frame(0.5 / 60.0).unwrap();
+        let second = runtime.run_frame(0.5 / 60.0).unwrap();
+        runtime.shutdown().unwrap();
+
+        let mut expected_accumulator = 0.0;
+        assert_eq!(
+            first.audio_ticks,
+            FrameClock::ticks_for_frame(0.5, &mut expected_accumulator).unwrap()
+        );
+        assert_eq!(
+            second.audio_ticks,
+            FrameClock::ticks_for_frame(0.5, &mut expected_accumulator).unwrap()
+        );
+        assert_eq!(runtime.snapshot().audio_accumulator, 0.0);
+        let events = events.borrow();
+        let game_init = events
+            .iter()
+            .position(|event| *event == "game_init")
+            .unwrap();
+        let update = events.iter().position(|event| *event == "update").unwrap();
+        let cleanup = events
+            .iter()
+            .position(|event| *event == "game_cleanup")
+            .unwrap();
+        assert!(game_init < update);
+        assert!(update < cleanup);
+
+        let executor_events = Rc::new(RefCell::new(Vec::new()));
+        let mut executor = Executor::new(false);
+        let event = executor_events.clone();
+        executor.register_constructor(move || {
+            event.borrow_mut().push("constructor-a");
+            Ok(())
+        });
+        let event = executor_events.clone();
+        executor.register_constructor(move || {
+            event.borrow_mut().push("constructor-b");
+            Ok(())
+        });
+        let event = executor_events.clone();
+        executor.register_main(move || {
+            event.borrow_mut().push("main");
+            Ok(())
+        });
+        let event = executor_events.clone();
+        executor.register_destructor(move || {
+            event.borrow_mut().push("destructor-a");
+            Ok(())
+        });
+        let event = executor_events.clone();
+        executor.register_destructor(move || {
+            event.borrow_mut().push("destructor-b");
+            Ok(())
+        });
+        executor.prolog().unwrap();
+        executor.epilog().unwrap();
+        assert_eq!(
+            executor_events.borrow().as_slice(),
+            [
+                "constructor-a",
+                "constructor-b",
+                "main",
+                "destructor-b",
+                "destructor-a"
+            ]
+        );
     }
 
     #[test]

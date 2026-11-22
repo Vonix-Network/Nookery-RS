@@ -1,4 +1,5 @@
-use crate::{BASE_FRAME_RATE, MAX_AUDIO_TICKS, MAX_DT_60FPS_FRAMES};
+use crate::{BASE_FRAME_RATE, MAX_DT_60FPS_FRAMES};
+use nookery_game::FrameClock;
 
 /// Per-frame timing after the C graph clamp and optional PC speed multiplier.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,7 +31,7 @@ impl Timing {
         }
         frames *= speed_multiplier;
         let total_60fps_frames = total_60fps_frames + frames;
-        if !frames.is_finite() || !total_60fps_frames.is_finite() {
+        if !frames.is_finite() || FrameClock::frame_time(total_60fps_frames).is_err() {
             return None;
         }
         Some(Self {
@@ -55,10 +56,10 @@ impl AudioSchedule {
     /// Match graph_dt_60hz_ticks: subtract all whole ticks, then cap the
     /// returned work to four ticks to avoid a spiral after a stall.
     pub fn ticks(&mut self, delta_60fps_frames: f64) -> u32 {
-        self.accumulator += delta_60fps_frames;
-        let whole = self.accumulator.floor();
-        self.accumulator -= whole;
-        whole.min(f64::from(MAX_AUDIO_TICKS)) as u32
+        if delta_60fps_frames == 0.0 {
+            return 0;
+        }
+        FrameClock::ticks_for_frame(delta_60fps_frames, &mut self.accumulator).unwrap_or_default()
     }
 
     pub const fn accumulator(self) -> f64 {
