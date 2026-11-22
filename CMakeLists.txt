@@ -69,6 +69,10 @@ option(ENABLE_DATA_FFI_PARITY
        "Build the opt-in C++/Rust data-folder parity executable (Linux host only)"
        OFF)
 
+option(ENABLE_NOOKERY_RUNTIME_SMOKE
+       "Build and run the opt-in C++ callback smoke for nookery-runtime"
+       OFF)
+
 set(AURORA_ENABLE_DVD ON CACHE BOOL "" FORCE)
 set(AURORA_ENABLE_CARD ON CACHE BOOL "" FORCE)
 set(AURORA_ENABLE_RMLUI ON CACHE BOOL "" FORCE)
@@ -570,6 +574,141 @@ if (ENABLE_DATA_FFI_PARITY)
         USES_TERMINAL
         COMMENT "Running the C++/Rust data-folder parity gate"
     )
+endif ()
+
+if (ENABLE_NOOKERY_RUNTIME_SMOKE)
+    find_program(NOOKERY_RUNTIME_CARGO_EXECUTABLE cargo)
+    if (NOT NOOKERY_RUNTIME_CARGO_EXECUTABLE)
+        message(FATAL_ERROR
+            "ENABLE_NOOKERY_RUNTIME_SMOKE requires cargo; install Rust or configure with -DENABLE_NOOKERY_RUNTIME_SMOKE=OFF")
+    endif ()
+
+    # An empty target deliberately means Cargo's host target.  Cross builds
+    # must set this cache entry to the Rust target triple matching the CMake
+    # toolchain; this avoids silently linking a host archive into a target app.
+    set(NOOKERY_RUNTIME_RUST_TARGET "${CMAKE_C_COMPILER_TARGET}" CACHE STRING
+        "Rust target triple for nookery-runtime; empty uses Cargo's host target")
+    set(NOOKERY_RUNTIME_CARGO_TARGET_DIR "${CMAKE_BINARY_DIR}/nookery-runtime-cargo")
+    if (WIN32)
+        set(NOOKERY_RUNTIME_RUST_LIBRARY_NAME "nookery_runtime.dll")
+    elseif (APPLE)
+        set(NOOKERY_RUNTIME_RUST_LIBRARY_NAME "libnookery_runtime.dylib")
+    else ()
+        set(NOOKERY_RUNTIME_RUST_LIBRARY_NAME "libnookery_runtime.so")
+    endif ()
+    set(NOOKERY_RUNTIME_RUST_LIBRARY
+        "${NOOKERY_RUNTIME_CARGO_TARGET_DIR}/release/${NOOKERY_RUNTIME_RUST_LIBRARY_NAME}")
+    set(NOOKERY_RUNTIME_CARGO_ARGS
+        build --release --locked
+        --manifest-path "${DECOMP_ROOT}/rust/Cargo.toml"
+        --package nookery-runtime)
+    if (NOOKERY_RUNTIME_RUST_TARGET)
+        list(APPEND NOOKERY_RUNTIME_CARGO_ARGS --target "${NOOKERY_RUNTIME_RUST_TARGET}")
+        set(NOOKERY_RUNTIME_RUST_LIBRARY
+            "${NOOKERY_RUNTIME_CARGO_TARGET_DIR}/${NOOKERY_RUNTIME_RUST_TARGET}/release/${NOOKERY_RUNTIME_RUST_LIBRARY_NAME}")
+    endif ()
+    file(GLOB_RECURSE NOOKERY_RUNTIME_RUST_SOURCES CONFIGURE_DEPENDS
+        "${DECOMP_ROOT}/rust/nookery-runtime/src/*.rs"
+    )
+    add_custom_command(
+        OUTPUT "${NOOKERY_RUNTIME_RUST_LIBRARY}"
+        COMMAND ${CMAKE_COMMAND} -E env
+            "CARGO_TARGET_DIR=${NOOKERY_RUNTIME_CARGO_TARGET_DIR}"
+            "${NOOKERY_RUNTIME_CARGO_EXECUTABLE}" ${NOOKERY_RUNTIME_CARGO_ARGS}
+        DEPENDS ${NOOKERY_RUNTIME_RUST_SOURCES}
+            "${DECOMP_ROOT}/rust/Cargo.toml"
+            "${DECOMP_ROOT}/rust/Cargo.lock"
+        COMMENT "Building the opt-in nookery-runtime release shared library"
+        VERBATIM
+    )
+    add_custom_target(nookery-runtime-sharedlib DEPENDS "${NOOKERY_RUNTIME_RUST_LIBRARY}")
+
+    add_library(nookery_runtime_shared SHARED IMPORTED GLOBAL)
+    set_target_properties(nookery_runtime_shared PROPERTIES
+        IMPORTED_LOCATION "${NOOKERY_RUNTIME_RUST_LIBRARY}"
+        IMPORTED_NO_SONAME TRUE
+        INTERFACE_INCLUDE_DIRECTORIES "${PC_ROOT}/include"
+    )
+    if (WIN32)
+        set_target_properties(nookery_runtime_shared PROPERTIES
+            IMPORTED_IMPLIB "${NOOKERY_RUNTIME_RUST_LIBRARY}.lib"
+        )
+    endif ()
+    add_dependencies(nookery_runtime_shared nookery-runtime-sharedlib)
+
+    add_library(nookery_runtime_adapter STATIC
+        "${PC_ROOT}/src/nookery_runtime_adapter.cpp"
+    )
+    target_include_directories(nookery_runtime_adapter PUBLIC "${PC_ROOT}/include")
+    add_dependencies(nookery_runtime_adapter nookery-runtime-sharedlib)
+    target_link_libraries(nookery_runtime_adapter PRIVATE nookery_runtime_shared)
+
+    # Cargo's cdylib is the exact runtime image used by every opt-in host
+    # target. Copying it beside each output and using a relative RPATH keeps
+    # the build and installed application on the same artifact, rather than
+    # accidentally resolving a different library from the host environment.
+    if (APPLE)
+        set(NOOKERY_RUNTIME_RELATIVE_RPATH "@loader_path")
+    elseif (UNIX)
+        set(NOOKERY_RUNTIME_RELATIVE_RPATH "\$ORIGIN")
+    endif ()
+    foreach (NOOKERY_RUNTIME_HOST_TARGET acgc)
+        add_custom_command(TARGET ${NOOKERY_RUNTIME_HOST_TARGET} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:nookery_runtime_shared>"
+                "$<TARGET_FILE_DIR:${NOOKERY_RUNTIME_HOST_TARGET}>"
+            COMMENT "Copying the exact nookery-runtime image beside ${NOOKERY_RUNTIME_HOST_TARGET}"
+            VERBATIM
+        )
+        if (NOOKERY_RUNTIME_RELATIVE_RPATH)
+            set_property(TARGET ${NOOKERY_RUNTIME_HOST_TARGET} APPEND PROPERTY
+                BUILD_RPATH "${NOOKERY_RUNTIME_RELATIVE_RPATH}")
+            set_property(TARGET ${NOOKERY_RUNTIME_HOST_TARGET} APPEND PROPERTY
+                INSTALL_RPATH "${NOOKERY_RUNTIME_RELATIVE_RPATH}")
+        endif ()
+    endforeach ()
+
+    # Link the adapter into the existing PC host only when this diagnostic
+    # option is explicitly enabled; boot_main and the live C path remain the
+    # application's production entry path.
+    target_compile_definitions(acgc PRIVATE ACGC_ENABLE_NOOKERY_RUNTIME_SMOKE=1)
+    target_link_libraries(acgc PRIVATE nookery_runtime_adapter nookery_runtime_shared)
+    target_include_directories(acgc PRIVATE "${PC_ROOT}/include")
+
+    add_executable(nookery-runtime-smoke
+        "${DECOMP_ROOT}/tools/nookery-runtime-smoke/main.cpp"
+    )
+    target_include_directories(nookery-runtime-smoke PRIVATE "${PC_ROOT}/include")
+    target_link_libraries(nookery-runtime-smoke PRIVATE
+        nookery_runtime_adapter
+        nookery_runtime_shared
+    )
+    if (UNIX)
+        find_package(Threads REQUIRED)
+        target_link_libraries(nookery-runtime-smoke PRIVATE Threads::Threads ${CMAKE_DL_LIBS} m)
+    endif ()
+    add_dependencies(nookery-runtime-smoke nookery-runtime-sharedlib)
+    add_custom_command(TARGET nookery-runtime-smoke POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:nookery_runtime_shared>"
+            "$<TARGET_FILE_DIR:nookery-runtime-smoke>"
+        COMMENT "Copying the exact nookery-runtime image beside nookery-runtime-smoke"
+        VERBATIM
+    )
+    if (NOOKERY_RUNTIME_RELATIVE_RPATH)
+        set_property(TARGET nookery-runtime-smoke APPEND PROPERTY BUILD_RPATH
+            "${NOOKERY_RUNTIME_RELATIVE_RPATH}")
+        set_property(TARGET nookery-runtime-smoke APPEND PROPERTY INSTALL_RPATH
+            "${NOOKERY_RUNTIME_RELATIVE_RPATH}")
+    endif ()
+
+    add_custom_target(nookery-runtime-smoke-test
+        COMMAND "$<TARGET_FILE:nookery-runtime-smoke>"
+        DEPENDS nookery-runtime-smoke
+        USES_TERMINAL
+        COMMENT "Running the C++/Rust nookery-runtime callback smoke"
+    )
+    install(FILES "${NOOKERY_RUNTIME_RUST_LIBRARY}" DESTINATION ${CMAKE_INSTALL_PREFIX})
 endif ()
 
 set_target_properties(acgc PROPERTIES

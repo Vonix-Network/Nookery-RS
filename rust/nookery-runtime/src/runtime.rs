@@ -407,6 +407,11 @@ where
     /// input, game update/exec/BGM, rendering, audio, and reset handling.
     pub fn run_frame(&mut self, raw_delta_seconds: f64) -> Result<FrameReport, RuntimeError> {
         self.require(Lifecycle::Booted)?;
+        // src/graph.c graph_proc only re-enters graph_main while
+        // game_is_doing(game); a stopped game must not replay the frame path.
+        if !self.game.doing {
+            return Err(RuntimeError::GameStopped);
+        }
         let timing = Timing::from_delta(
             raw_delta_seconds,
             self.graph.dt_total_60fps_frames,
@@ -424,6 +429,10 @@ where
     }
 
     fn run_frame_inner(&mut self, timing: Timing) -> Result<FrameReport, RuntimeError> {
+        // src/graph.c graph_main re-arms game->disable_prenmi at frame start;
+        // without this a game that set it (e.g. prenmi_main) would suppress the
+        // IRQ_RESET_PRENMI transition forever.
+        self.game.disable_prenmi = false;
         self.graph.dt_seconds = timing.delta_seconds;
         self.graph.dt_num_60fps_frames = timing.delta_60fps_frames;
         self.graph.dt_total_60fps_frames = timing.total_60fps_frames;
@@ -479,6 +488,7 @@ where
         };
 
         let reset_triggered = self.check_reset()?;
+        self.goto_prenmi_if_pending()?;
         Ok(FrameReport {
             audio_ticks,
             display_submitted,
@@ -487,6 +497,9 @@ where
         })
     }
 
+    /// src/graph.c do_soft_reset/reset_check. `SoftResetEnable = FALSE` inside
+    /// do_soft_reset makes the reset one-shot, so later frames keep the queued
+    /// IRQ_RESET_PRENMI status without repeating the audio or reset callbacks.
     fn check_reset(&mut self) -> Result<bool, RuntimeError> {
         if !self.soft_reset_enabled
             || !self
@@ -496,19 +509,29 @@ where
         {
             return Ok(false);
         }
+        self.soft_reset_enabled = false;
         self.reset_status = ResetStatus::PreNmi;
         self.call_audio(Operation::Reset, |a| a.reset())?;
         self.call_callback(CallbackKind::Reset, |callbacks, game| {
             callbacks.reset.as_mut().map(|callback| callback(game))
         })?;
-        if !self.game.disable_prenmi {
-            self.call_callback(CallbackKind::Prenmi, |callbacks, game| {
-                callbacks.prenmi.as_mut().map(|callback| callback(game))
-            })?;
-            self.game.doing = false;
-            self.game.next_transition = Some(GameTransition::Prenmi);
-        }
         Ok(true)
+    }
+
+    /// Tail of src/graph.c graph_main:
+    /// `if (ResetStatus == IRQ_RESET_PRENMI && game->disable_prenmi == FALSE)`
+    /// `GAME_GOTO_NEXT(game, prenmi, PRENMI)`. Evaluated every frame, so a
+    /// transition suppressed by disable_prenmi completes on a later frame.
+    fn goto_prenmi_if_pending(&mut self) -> Result<(), RuntimeError> {
+        if self.reset_status != ResetStatus::PreNmi || self.game.disable_prenmi {
+            return Ok(());
+        }
+        self.call_callback(CallbackKind::Prenmi, |callbacks, game| {
+            callbacks.prenmi.as_mut().map(|callback| callback(game))
+        })?;
+        self.game.doing = false;
+        self.game.next_transition = Some(GameTransition::Prenmi);
+        Ok(())
     }
 
     /// Reach the C game_resize_hyral allocation boundary without inventing an

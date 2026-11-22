@@ -267,6 +267,33 @@ fn controller_reads_preserve_fixnes_open_bus_upper_bits_through_cpu_bus() {
 }
 
 #[test]
+fn player_two_register_returns_fixnes_open_bus_and_leaves_p1_shift_untouched() {
+    // C oracle: inputGetP2 (pc/lib/fixnes/input.c:65-70) has no player-2
+    // state, so it returns `(memLastVal & ~0x1F)` and never advances `inPos`
+    // or reads `inValReads`.  Each `LDA $4017` operand fetch leaves the high
+    // operand byte $40 in memLastVal, so the read yields $40 with bits 0..4
+    // cleared.  Reading $4017 must not consume a player-1 shift position.
+    let program = [
+        0xa9, 0x01, 0x8d, 0x16, 0x40, // strobe high
+        0xa9, 0x00, 0x8d, 0x16, 0x40, // strobe low, P1 position = 0
+        0xad, 0x17, 0x40, 0x85, 0x20, // LDA $4017 -> open bus $40
+        0xad, 0x17, 0x40, 0x85, 0x23, // second $4017 read, still $40
+        0xad, 0x16, 0x40, 0x85, 0x21, // P1 bit 0 (A) is still first
+        0xad, 0x16, 0x40, 0x85, 0x22, // P1 bit 1 (B)
+        0x4c, 0x1e, 0x80, // JMP self; JMP starts at $801e
+    ];
+    let image = RomImage::parse(fixture_rom(&program)).expect("controller fixture");
+    let mut core = NesCore::new(&image);
+    core.set_input(0x01); // A only
+    core.frame().expect("controller fixture executes");
+
+    assert_eq!(core.ram()[0x20], 0x40, "$4017 keeps open-bus upper bits");
+    assert_eq!(core.ram()[0x23], 0x40, "$4017 read is not a shift step");
+    assert_eq!(core.ram()[0x21], 0x41, "P1 A bit not consumed by $4017");
+    assert_eq!(core.ram()[0x22], 0x40, "P1 B bit follows A");
+}
+
+#[test]
 fn oam_dma_total_stall_does_not_claim_per_cycle_timing_parity() {
     assert!(NesCore::gaps().contains(&nookery_famicom::core::CoreGap::OamDmaTiming));
 }

@@ -4,7 +4,9 @@
 //! bindings as the input contract, then applies the button masks, stick
 //! clamping, trigger thresholds, hotplug state, and error behavior consumed by
 //! `padmgr.c`. Platform polling and Aurora event registration remain adapter
-//! work; [`ControllerSample`] is the bounded hand-off for those adapters.
+//! work; [`ControllerSample`] is the bounded hand-off for those adapters, and
+//! [`ControllerRuntime::set_keyboard_present`] is where an adapter reports
+//! `SDL_HasKeyboard()` for the controller-claim fallback.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -388,6 +390,7 @@ const MAX_SNAPSHOT_LINE: usize = 128;
 pub struct ControllerRuntime {
     ports: [ControllerPort; PAD_MAX_CONTROLLERS],
     auto_assign_controller: bool,
+    keyboard_present: bool,
     profiles: BTreeMap<SourceId, Vec<Binding>>,
 }
 
@@ -409,8 +412,31 @@ impl ControllerRuntime {
                 ControllerPort::new(3),
             ],
             auto_assign_controller: true,
+            keyboard_present: true,
             profiles: BTreeMap::new(),
         }
+    }
+
+    /// Overrides the host keyboard report used by [`Self::auto_assign`].
+    ///
+    /// Upstream asks `SDL_HasKeyboard()` on every event, so this is live host
+    /// state rather than a setting: it is not part of the snapshot, and an
+    /// adapter must re-apply it after [`Self::deserialize`].
+    pub fn with_keyboard(self, present: bool) -> Self {
+        Self {
+            keyboard_present: present,
+            ..self
+        }
+    }
+
+    /// Records a new `SDL_HasKeyboard()` result for a running runtime.
+    pub const fn set_keyboard_present(&mut self, present: bool) {
+        self.keyboard_present = present;
+    }
+
+    /// The last reported host keyboard presence.
+    pub const fn keyboard_present(&self) -> bool {
+        self.keyboard_present
     }
 
     /// Returns a port without indexing through untrusted input.
@@ -421,8 +447,17 @@ impl ControllerRuntime {
             .ok_or(RuntimeError::InvalidPort(port))
     }
 
-    /// Returns whether automatic button-press assignment is enabled.
+    /// `acgc::controller_ports::auto_assign()`: the stored preference, or a host
+    /// with no keyboard at all. Upstream re-reads `SDL_HasKeyboard()` per event,
+    /// so this is not a persisted setting.
     pub const fn auto_assign(&self) -> bool {
+        self.auto_assign_controller || !self.keyboard_present
+    }
+
+    /// The stored `input.autoAssignController` value alone, which is what the C++
+    /// settings UI shows and writes. Distinct from [`Self::auto_assign`], which
+    /// also covers keyboardless hosts.
+    pub const fn auto_assign_preference(&self) -> bool {
         self.auto_assign_controller
     }
 
@@ -492,7 +527,7 @@ impl ControllerRuntime {
             return Err(RuntimeError::InvalidSource(source));
         }
         let current = self.port(PAD0)?;
-        if !self.auto_assign_controller || current.source().is_some() {
+        if !self.auto_assign() || current.source().is_some() {
             return Ok(false);
         }
         self.set_assignment(PAD0, PortAssignment::Controller(source))?;
@@ -1364,6 +1399,58 @@ mod tests {
             Err(RuntimeError::Snapshot(SnapshotError::DuplicateKey(
                 "port0".to_owned()
             )))
+        );
+    }
+
+    #[test]
+    fn keyboardless_host_claims_player_one_even_with_the_setting_off() {
+        // `auto_assign()` is `autoAssignController || !SDL_HasKeyboard()`: the
+        // stored setting cannot disable the fallback on a host with no keyboard,
+        // so a fresh button press still claims port 0.
+        let mut runtime = ControllerRuntime::new().with_keyboard(false);
+        runtime.select_none();
+        assert!(!runtime.auto_assign_preference());
+        assert!(runtime.auto_assign());
+        assert_eq!(
+            runtime.port(PAD0).expect("port zero exists").assignment(),
+            PortAssignment::None
+        );
+        assert!(runtime.button_press(21).expect("synthetic source is valid"));
+        let port = runtime.port(PAD0).expect("port zero exists");
+        assert_eq!(port.source(), Some(21));
+        assert_eq!(port.status(), PortStatus::Connected);
+
+        // The same preference with a keyboard attached keeps the port unclaimed.
+        let mut desktop = ControllerRuntime::new();
+        desktop.select_none();
+        assert!(!desktop.auto_assign());
+        assert!(!desktop.button_press(22).expect("synthetic source is valid"));
+        assert_eq!(
+            desktop.port(PAD0).expect("port zero exists").assignment(),
+            PortAssignment::None
+        );
+
+        // Presence is live host state: re-reporting a keyboard stops the fallback.
+        desktop.set_keyboard_present(false);
+        assert!(desktop.auto_assign());
+        desktop.set_keyboard_present(true);
+        assert!(!desktop.auto_assign());
+    }
+
+    #[test]
+    fn keyboard_presence_is_not_part_of_the_persisted_snapshot() {
+        let mut runtime = ControllerRuntime::new().with_keyboard(false);
+        assert!(runtime.button_press(23).expect("synthetic source is valid"));
+        let encoded = runtime.serialize();
+        assert!(!encoded.contains("keyboard"), "{encoded}");
+        let restored = ControllerRuntime::deserialize(&encoded).expect("valid snapshot");
+        // Nothing in the snapshot can claim a keyboard exists or is absent; the
+        // adapter re-applies the host report after restoring.
+        assert!(restored.keyboard_present());
+        assert!(restored.auto_assign());
+        assert_eq!(
+            restored.port(PAD0).expect("port zero exists").source(),
+            Some(23)
         );
     }
 

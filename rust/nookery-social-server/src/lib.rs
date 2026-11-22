@@ -2400,6 +2400,103 @@ mod tests {
     }
 
     #[test]
+    fn two_visitors_reusing_client_request_ids_are_independent_and_replayable() {
+        let (mut server, root) = server(Duration::from_secs(60));
+        let owner = model::SessionId::new(10);
+        let first = model::SessionId::new(11);
+        let second = model::SessionId::new(12);
+        let town = TownKey::new([0x5a; 16]);
+        server.connect(owner, model::ActorId::new(1)).unwrap();
+        server
+            .execute(
+                owner,
+                model::RequestId::new(1),
+                0,
+                Command::CreateTown { town_id: town },
+            )
+            .unwrap();
+        for (session, actor) in [(first, 2), (second, 3)] {
+            server.connect(session, model::ActorId::new(actor)).unwrap();
+            server
+                .execute(
+                    session,
+                    model::RequestId::new(2),
+                    0,
+                    Command::Join { town_id: town },
+                )
+                .unwrap();
+        }
+
+        // Both clients number their own request stream; request ID 3 is live
+        // in each session at once and must not be treated as a replay or a
+        // conflict for the other session.
+        assert_eq!(
+            server.execute(
+                first,
+                model::RequestId::new(3),
+                2,
+                Command::Apply {
+                    town_id: town,
+                    command: model::Command::SetPresence {
+                        x: -5,
+                        y: 6,
+                        facing: 1,
+                    },
+                },
+            ),
+            Ok(Response::Accepted { revision: 3 })
+        );
+        assert_eq!(
+            server.execute(
+                second,
+                model::RequestId::new(3),
+                3,
+                Command::Apply {
+                    town_id: town,
+                    command: model::Command::SetPresence {
+                        x: 7,
+                        y: -8,
+                        facing: 2,
+                    },
+                },
+            ),
+            Ok(Response::Accepted { revision: 4 })
+        );
+        let live = server.state_bytes(town).unwrap();
+        let snapshot = decode_model_snapshot(&live).unwrap();
+        assert_eq!(snapshot.revision(), 4);
+        let presence = |session: model::SessionId| {
+            snapshot
+                .sessions()
+                .iter()
+                .find(|active| active.session_id() == session)
+                .and_then(|active| active.presence())
+        };
+        assert_eq!(presence(first), Some(model::Presence::from_parts(-5, 6, 1)));
+        assert_eq!(
+            presence(second),
+            Some(model::Presence::from_parts(7, -8, 2))
+        );
+
+        // The durable command log carries the same request ID twice. A torn
+        // snapshot must therefore replay both records, one per session.
+        fs::write(
+            root.join("5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a/snapshot.bin"),
+            [0u8; 1],
+        )
+        .unwrap();
+        drop(server);
+        let mut recovered =
+            TownServer::open(Store::open(&root).unwrap(), Duration::from_secs(60)).unwrap();
+        assert_eq!(
+            recovered.recovery_paths().get(&town),
+            Some(&RecoveryPath::CommandLog)
+        );
+        assert_eq!(recovered.state_bytes(town).unwrap(), live);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn accepted_response_payload_round_trips_without_duplicate_revision() {
         let (server, root) = server(Duration::from_secs(60));
         let revision = 0x0102_0304_0506_0708;
@@ -2754,6 +2851,88 @@ mod tests {
             panic!("loopback bind permission changed during deterministic rerun");
         };
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn loopback_two_visitors_with_colliding_request_ids_apply_independently() {
+        let Some((running, root)) = running_loopback(LoopbackConfig::default()) else {
+            return;
+        };
+        let town = TownKey::new([0x32; 16]);
+        let mut owner = SocialClient::connect(
+            running.local_addr(),
+            b"lane secret",
+            model::SessionId::new(10),
+            model::ActorId::new(1),
+            TownKey::new([0; 16]),
+        )
+        .unwrap();
+        assert_eq!(owner.create_town(town).unwrap(), 0);
+        let mut first = SocialClient::connect(
+            running.local_addr(),
+            b"lane secret",
+            model::SessionId::new(11),
+            model::ActorId::new(2),
+            town,
+        )
+        .unwrap();
+        let mut second = SocialClient::connect(
+            running.local_addr(),
+            b"lane secret",
+            model::SessionId::new(12),
+            model::ActorId::new(3),
+            town,
+        )
+        .unwrap();
+        // Two independent client request streams: after join, both clients
+        // issue the same request ID for their first command.
+        assert_eq!(first.join(town).unwrap(), 1);
+        assert_eq!(second.join(town).unwrap(), 2);
+        assert_eq!(
+            first
+                .apply(
+                    town,
+                    2,
+                    model::Command::SetPresence {
+                        x: -5,
+                        y: 6,
+                        facing: 1,
+                    },
+                )
+                .unwrap(),
+            3
+        );
+        assert_eq!(
+            second
+                .apply(
+                    town,
+                    3,
+                    model::Command::SetPresence {
+                        x: 7,
+                        y: -8,
+                        facing: 2,
+                    },
+                )
+                .unwrap(),
+            4
+        );
+        let (revision, state) = second.sync(town).unwrap();
+        assert_eq!(revision, 4);
+        let decoded = decode_model_snapshot(&state).unwrap();
+        let presence = |session: u64| {
+            decoded
+                .sessions()
+                .iter()
+                .find(|active| active.session_id() == model::SessionId::new(session))
+                .and_then(|active| active.presence())
+        };
+        assert_eq!(presence(11), Some(model::Presence::from_parts(-5, 6, 1)));
+        assert_eq!(presence(12), Some(model::Presence::from_parts(7, -8, 2)));
+        drop(first);
+        drop(second);
+        drop(owner);
+        drop(running);
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

@@ -10,8 +10,11 @@
 //! * `parse_xxh3_128` and streaming `XXH3_128bits_*` — [`hash`];
 //! * `open_and_inspect` / `verify_owned_stream` classification and hashing
 //!   order — [`engine`];
-//! * bounded RVZ/CISO metadata inspection and raw ISO/GCM file verification —
-//!   [`stream_verify`];
+//! * bounded RVZ/CISO metadata inspection plus path-level
+//!   [`stream_verify::inspect_disc_path`] (no hashing) and
+//!   [`stream_verify::verify_path`] (full hash) — [`stream_verify`];
+//! * `acgc::disc::DiscInfo` and its unconditional `update_info` projection —
+//!   [`metadata::DiscInfo`];
 //! * `validation_error` status mapping and the launch gate — [`error`];
 //! * the `log_verification_state` line and `verification_to_config` /
 //!   `verification_from_config` round trip — [`log`].
@@ -44,7 +47,11 @@
 //! valid image as [`ValidationError::HashMismatch`].
 //! [`stream_verify::verify_path`] makes this boundary explicit for RVZ by
 //! returning `Status::Failed` with a decoder-unavailable diagnostic after
-//! bounded header inspection. CISO is verified through its logical sparse map.
+//! bounded header inspection. CISO is inspected and verified through its
+//! logical sparse map by [`stream_verify::inspect_disc_path`] and
+//! [`stream_verify::verify_path`], both of which share one container route so
+//! the classification gate (`acgc::disc::inspect` → `open_and_inspect`) and the
+//! hash gate cannot disagree about a path.
 //!
 //! Also out of scope, because no source evidence establishes them as pure
 //! catalog operations: the prelaunch UI state machine, settings persistence
@@ -96,7 +103,7 @@ pub use image::{Bytes, DiscImage, DiscStream, ImageError, StreamError};
 pub use log::{
     VerificationState, verification_from_config, verification_log_line, verification_to_config,
 };
-pub use metadata::{CancelFlag, Cancellation, Metadata, Never, Progress, Result};
+pub use metadata::{CancelFlag, Cancellation, DiscInfo, Metadata, Never, Progress, Result};
 pub use rarc::{
     ENTRY_SIZE as RARC_ENTRY_SIZE, HEADER_SIZE as RARC_HEADER_SIZE, INFO_SIZE as RARC_INFO_SIZE,
     MAGIC as RARC_MAGIC, NODE_SIZE as RARC_NODE_SIZE, RarcArchive, RarcError, RarcFile,
@@ -104,7 +111,8 @@ pub use rarc::{
 pub use status::Status;
 pub use stream_verify::{
     CISO_HEADER_SIZE, CISO_MAGIC, CISO_MAP_SIZE, CISO_MIN_BLOCK_SIZE, ContainerKind,
-    ContainerMetadata, RVZ_MAGIC, StreamVerifyError, inspect_path, inspect_stream, verify_path,
+    ContainerMetadata, RVZ_MAGIC, StreamVerifyError, inspect_disc_path, inspect_path,
+    inspect_stream, verify_path,
 };
 pub use yaz0::{
     HEADER_SIZE as YAZ0_HEADER_SIZE, MAGIC as YAZ0_MAGIC, Yaz0Error, decode as yaz0_decode,

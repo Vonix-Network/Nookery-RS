@@ -12,10 +12,12 @@
 //! not consume visitor capacity; at most [`MAX_MODERATORS`] moderators may be
 //! active. These deliberately narrow bounds are policy, not gameplay parity.
 //!
-//! Request idempotency is bounded by [`MAX_REQUEST_HISTORY`]. The oldest
-//! successful request record is evicted first when the limit is reached. Once
-//! evicted, reusing that request ID is no longer recognized as a replay and is
-//! evaluated as a new request. No cryptographic digest is provided.
+//! Request idempotency is bounded by [`MAX_REQUEST_HISTORY`] and scoped per
+//! session: request IDs are client-chosen, so distinct sessions may reuse the
+//! same ID without colliding. The oldest successful request record is evicted
+//! first when the limit is reached. Once evicted, reusing that request ID is
+//! no longer recognized as a replay and is evaluated as a new request. No
+//! cryptographic digest is provided.
 
 use core::fmt;
 
@@ -591,15 +593,16 @@ impl Town {
         request_id: RequestId,
         command: Command,
     ) -> Result<Commit, ApplyError> {
+        // Request IDs are client-chosen and therefore only meaningful per
+        // session: every client numbers its own stream from one. Retained
+        // history must be matched on the originating session as well, or one
+        // visitor's commands would collide with another visitor's.
         if let Some(record) = self
             .request_history
             .iter()
-            .find(|record| record.commit.request_id == request_id)
+            .find(|record| record.session_id == session && record.commit.request_id == request_id)
         {
-            if record.session_id == session
-                && record.expected_revision == expected_revision
-                && record.command == command
-            {
+            if record.expected_revision == expected_revision && record.command == command {
                 return Ok(record.commit.clone());
             }
             return Err(ApplyError::RequestIdConflict);
@@ -937,6 +940,82 @@ mod tests {
         );
         assert_eq!(conflict, Err(ApplyError::RequestIdConflict));
         assert_eq!(town.snapshot(), before);
+    }
+
+    #[test]
+    fn distinct_sessions_may_reuse_request_ids() {
+        let mut town = town();
+        admit(&mut town, 11, 2);
+        admit(&mut town, 12, 3);
+        // Every client numbers its own request stream from one, so request
+        // IDs are only unique per session. A second visitor's request 1 must
+        // not collide with the first visitor's retained request 1.
+        let first = apply(
+            &mut town,
+            11,
+            1,
+            Command::SetPresence {
+                x: 1,
+                y: 2,
+                facing: 0,
+            },
+        )
+        .unwrap();
+        let second = apply(
+            &mut town,
+            12,
+            1,
+            Command::SetPresence {
+                x: 3,
+                y: 4,
+                facing: 1,
+            },
+        )
+        .expect("a distinct session may reuse a request ID");
+        assert_eq!(first.revision() + 1, second.revision());
+
+        // Per-session replay still returns each session's own retained commit.
+        assert_eq!(
+            town.apply(
+                SessionId::new(11),
+                2,
+                RequestId::new(1),
+                Command::SetPresence {
+                    x: 1,
+                    y: 2,
+                    facing: 0,
+                },
+            ),
+            Ok(first.clone())
+        );
+        assert_eq!(
+            town.apply(
+                SessionId::new(12),
+                3,
+                RequestId::new(1),
+                Command::SetPresence {
+                    x: 3,
+                    y: 4,
+                    facing: 1,
+                },
+            ),
+            Ok(second.clone())
+        );
+        // Reusing a request ID differently within its own session still fails.
+        assert_eq!(
+            town.apply(
+                SessionId::new(12),
+                3,
+                RequestId::new(1),
+                Command::SetPresence {
+                    x: 0,
+                    y: 0,
+                    facing: 0,
+                },
+            ),
+            Err(ApplyError::RequestIdConflict)
+        );
+        assert_eq!(town.snapshot(), *second.snapshot());
     }
 
     #[test]

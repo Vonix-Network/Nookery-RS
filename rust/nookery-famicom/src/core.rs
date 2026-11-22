@@ -3,7 +3,7 @@
 //! The implementation ports the highest-value PC fixNES contracts without
 //! calling the C emulator: iNES validation and mapper-0 PRG mapping, the
 //! reset-vector/6502 instruction and PPU-NMI path needed by synthetic fixtures, the
-//! controller shift register with fixNES open-bus behavior, a frame-sampled mapper-0 PPU picture, NTSC
+//! controller shift register and the `$4016`/`$4017` fixNES open-bus reads, a frame-sampled mapper-0 PPU picture, NTSC
 //! frame timing, and the fixed 32 kHz/60 audio handoff size. Full mapper and
 //! APU waveform behavior, plus exact mid-scanline PPU timing, remain typed
 //! gaps in [`CoreGap`].
@@ -253,7 +253,6 @@ pub const NOT_PORTED: &[&str] = &[
     "cpuKIL, cpuSLO, cpuRLA, cpuSRE, cpuRRA, cpuDCP, cpuISC and other unofficial opcode handlers",
     "ppuCycle / ppuDrawDone scanline rendering and mapper-cycle timing (pc/lib/fixnes/ppu.c)",
     "cpuDoOAM_DMA per-cycle read/write/PPU-dot interleaving (pc/lib/fixnes/cpu.c)",
-    "inputGetP2 open-bus read behavior (pc/lib/fixnes/input.c)",
     "pc_fixnes_render_frame / fixnes_capture_audio host conversion and DMA (pc/src/pc_nes_fixnes.c)",
 ];
 
@@ -435,7 +434,9 @@ impl Bus {
             // fixNES inputGetP1 returns the controller bit over the previous
             // bus value's upper bits: (memLastVal & ~0x1f) | (ret & 1).
             0x4016 => (self.open_bus & !0x1f) | (self.controller.read() & 1),
-            0x4017 => 0,
+            // inputGetP2 has no player-2 state yet and returns only
+            // (memLastVal & ~0x1f); it never advances the P1 shift position.
+            0x4017 => self.open_bus & !0x1f,
             0x6000..=0x7fff => self
                 .prg_ram
                 .get((usize::from(address) - 0x6000) % self.prg_ram.len())

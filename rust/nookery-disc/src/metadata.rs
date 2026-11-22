@@ -35,6 +35,41 @@ impl Metadata {
     }
 }
 
+/// Metadata shown to the user for one path (`acgc::disc::DiscInfo`).
+///
+/// Mirrors the aggregate in `pc/include/acgc/disc.hpp`. [`DiscInfo::from_result`]
+/// ports `acgc_disc.cpp::update_info`, which assigns all four fields from the
+/// result metadata with no success test: a failed inspect shows the empty
+/// metadata, not the previously displayed disc.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DiscInfo {
+    /// Six-character game ID as text.
+    pub game_id: String,
+    /// Title text, NUL-trimmed.
+    pub title: String,
+    /// Disc number within a multi-disc release.
+    pub disc_number: u8,
+    /// Disc revision.
+    pub revision: u8,
+}
+
+impl DiscInfo {
+    /// Ports `acgc_disc.cpp::update_info`.
+    ///
+    /// The projection is unconditional: it is the caller's job to discard the
+    /// value when the validation category does not allow launch, exactly as
+    /// `prelaunch.cpp` resets `configuredDiscInfo` on a non-`Success` inspect.
+    #[must_use]
+    pub fn from_result(result: &Result) -> Self {
+        Self {
+            game_id: result.metadata.game_id.clone(),
+            title: result.metadata.title.clone(),
+            disc_number: result.metadata.disc_number,
+            revision: result.metadata.revision,
+        }
+    }
+}
+
 /// Whether verification should stop (`Progress::cancelRequested`).
 pub trait Cancellation {
     /// Returns `true` once the caller has asked to stop.

@@ -18,6 +18,9 @@
 #include "acgc/app_info.hpp"
 #include "acgc/controller_ports.hpp"
 #include "acgc/input_profiles.hpp"
+#if defined(ACGC_ENABLE_NOOKERY_RUNTIME_SMOKE)
+#include "acgc/nookery_runtime_adapter.h"
+#endif
 #include "acgc/data.hpp"
 #include "acgc/disc.hpp"
 #include "acgc/legacy_input.hpp"
@@ -301,6 +304,9 @@ struct CommandLine {
     std::string discPath;
     bool discPathExplicit = false;
     bool allowCpuAdapter = false;
+#if defined(ACGC_ENABLE_NOOKERY_RUNTIME_SMOKE)
+    bool runtimeSmoke = false;
+#endif
 };
 
 enum class ParseOutcome { Run, Exit, Failed };
@@ -323,6 +329,10 @@ ParseOutcome parse_command_line(int argc, char* argv[], CommandLine* out) {
         ("date", "Override the in-game date, M/D[/Y]", cxxopts::value<std::string>())
         ("allow-cpu-adapter", "Allow a CPU (software) WebGPU adapter; needed on hosts with no usable GPU such as headless CI",
             cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+#if defined(ACGC_ENABLE_NOOKERY_RUNTIME_SMOKE)
+        ("runtime-smoke", "Run the Rust runtime callback smoke and exit without opening a disc",
+            cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+#endif
         ("rain", "Force rain, optionally =light, =normal or =heavy",
             cxxopts::value<std::string>()->implicit_value("heavy"));
     options.parse_positional({"disc"});
@@ -366,6 +376,9 @@ ParseOutcome parse_command_line(int argc, char* argv[], CommandLine* out) {
     }
 
     out->allowCpuAdapter = parsed["allow-cpu-adapter"].as<bool>();
+#if defined(ACGC_ENABLE_NOOKERY_RUNTIME_SMOKE)
+    out->runtimeSmoke = parsed["runtime-smoke"].as<bool>();
+#endif
 
     if (parsed.count("framelimit")) {
         int limit = -1;
@@ -495,6 +508,12 @@ int main(int argc, char* argv[]) {
     case ParseOutcome::Run:
         break;
     }
+
+#if defined(ACGC_ENABLE_NOOKERY_RUNTIME_SMOKE)
+    if (commandLine.runtimeSmoke) {
+        return acgc_nookery_runtime_smoke();
+    }
+#endif
 
     const acgc::data::Paths data_paths = acgc::data::initialize(s_user_directory);
     const auto& log_root = data_paths.cachePath;

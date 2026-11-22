@@ -291,6 +291,84 @@ mod tests {
     }
 
     #[test]
+    fn reset_transition_fires_prenmi_once_and_stops_the_frame_loop() {
+        let (mut runtime, events) = runtime(true, false);
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_reset(move |_| {
+            callback_events.borrow_mut().push("reset_callback");
+            Ok(())
+        });
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_prenmi(move |_| {
+            callback_events.borrow_mut().push("prenmi_callback");
+            Ok(())
+        });
+        runtime.set_soft_reset_enabled(true);
+        runtime.boot().unwrap();
+
+        let report = runtime.run_frame(1.0 / 60.0).unwrap();
+        assert!(report.reset_triggered);
+        assert!(report.stopped);
+        assert!(!runtime.snapshot().game.disable_prenmi);
+        assert_eq!(
+            runtime.snapshot().game.next_transition,
+            Some(super::GameTransition::Prenmi)
+        );
+
+        // src/graph.c graph_proc enters graph_main only while game_is_doing, so
+        // a stopped game must not re-enter the frame path or replay callbacks.
+        assert_eq!(
+            runtime.run_frame(1.0 / 60.0),
+            Err(RuntimeError::GameStopped)
+        );
+        assert_eq!(runtime.lifecycle(), Lifecycle::Booted);
+        let count = |event: &str| events.borrow().iter().filter(|e| **e == event).count();
+        assert_eq!(count("reset_callback"), 1);
+        assert_eq!(count("prenmi_callback"), 1);
+    }
+
+    #[test]
+    fn pending_prenmi_transition_defers_while_disable_prenmi_is_set() {
+        let (mut runtime, events) = runtime(true, false);
+        let first_update = Rc::new(RefCell::new(true));
+        let flag = first_update.clone();
+        runtime.callbacks_mut().register_update(move |game, _| {
+            if *flag.borrow() {
+                *flag.borrow_mut() = false;
+                game.disable_prenmi = true;
+            }
+            Ok(())
+        });
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_prenmi(move |_| {
+            callback_events.borrow_mut().push("prenmi_callback");
+            Ok(())
+        });
+        runtime.set_soft_reset_enabled(true);
+        runtime.boot().unwrap();
+
+        // The game raises disable_prenmi, so graph_main defers the queued
+        // IRQ_RESET_PRENMI transition on the frame the reset was detected.
+        let first = runtime.run_frame(1.0 / 60.0).unwrap();
+        assert!(first.reset_triggered);
+        assert!(!first.stopped);
+        assert_eq!(runtime.snapshot().reset_status, super::ResetStatus::PreNmi);
+
+        // graph_main re-arms disable_prenmi each frame, so the pending
+        // transition completes next frame without a second reset.
+        let second = runtime.run_frame(1.0 / 60.0).unwrap();
+        assert!(!second.reset_triggered);
+        assert!(second.stopped);
+        assert_eq!(
+            runtime.snapshot().game.next_transition,
+            Some(super::GameTransition::Prenmi)
+        );
+        let count = |event: &str| events.borrow().iter().filter(|e| **e == event).count();
+        assert_eq!(count("prenmi_callback"), 1);
+        assert_eq!(count("reset_callback"), 0);
+    }
+
+    #[test]
     fn adapter_error_is_bounded_and_runtime_becomes_failed() {
         let (mut runtime, _) = runtime(false, true);
         runtime.boot().unwrap();

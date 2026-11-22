@@ -165,36 +165,67 @@ pub fn verify_path(
     cancel: &dyn Cancellation,
     on_progress: &mut dyn FnMut(Progress),
 ) -> Result {
-    let mut file = match open_regular_file(path) {
-        Ok(file) => file,
-        Err(error) => return mapped_error(error),
-    };
-    let source_size = match file.metadata() {
-        Ok(metadata) => metadata.len(),
-        Err(_) => return mapped_error(StreamVerifyError::Io),
-    };
-    let kind_hint = extension_kind(path);
-    let metadata = match inspect_stream(&mut file, source_size, cancel, kind_hint) {
-        Ok(metadata) => metadata,
-        Err(error) => return mapped_error(error),
-    };
+    match with_logical_image(path, cancel, |image, _| {
+        engine::verify(image, catalog, cancel, on_progress)
+    }) {
+        Ok(result) => result,
+        Err(failed) => failed,
+    }
+}
+
+/// Inspects a disc path without hashing it, mirroring
+/// `acgc::disc::inspect` → `borealis::disc::inspect`.
+///
+/// This is the classification half of [`verify_path`]: the container route is
+/// identical, but the logical image is only read for its fixed 0x400-byte
+/// header and matched against the catalog, so `Status::Success` here means
+/// "accepted disc, hash not yet checked". `prelaunch.cpp` and `aurora_main.cpp`
+/// gate the launch path on exactly that category.
+///
+/// RVZ keeps the decoder-unavailable boundary: compressed bytes are never
+/// classified as a logical header.
+pub fn inspect_disc_path(path: &Path, catalog: &Catalog, cancel: &dyn Cancellation) -> Result {
+    match with_logical_image(path, cancel, |image, _| engine::inspect(image, catalog)) {
+        Ok(result) => result,
+        Err(failed) => failed,
+    }
+}
+
+/// Opens a path, detects its container, and hands the logical image to `run`.
+///
+/// The route is shared by [`verify_path`] and [`inspect_disc_path`] so both
+/// agree on path rejection, container detection, CISO map validation, and the
+/// RVZ decoder boundary. `run` borrows the image only for the duration of the
+/// call, so no decompressed state outlives it.
+fn with_logical_image<T>(
+    path: &Path,
+    cancel: &dyn Cancellation,
+    mut run: impl FnMut(&mut dyn DiscImage, &ContainerMetadata) -> T,
+) -> std::result::Result<T, Result> {
+    let mut file = open_regular_file(path).map_err(mapped_error)?;
+    let source_size = file
+        .metadata()
+        .map_err(|_| mapped_error(StreamVerifyError::Io))?
+        .len();
+    let metadata = inspect_stream(&mut file, source_size, cancel, extension_kind(path))
+        .map_err(mapped_error)?;
     if metadata.kind == ContainerKind::Rvz {
-        return mapped_error(StreamVerifyError::DecoderUnavailable(metadata.kind));
+        return Err(mapped_error(StreamVerifyError::DecoderUnavailable(
+            metadata.kind,
+        )));
     }
 
     if metadata.kind == ContainerKind::Ciso {
-        let mut image = match CisoImage::open(&mut file) {
-            Ok(image) => image,
-            Err(error) => return mapped_error(ciso_error(error)),
-        };
-        return engine::verify(&mut image, catalog, cancel, on_progress);
+        let mut image =
+            CisoImage::open(&mut file).map_err(|error| mapped_error(ciso_error(error)))?;
+        return Ok(run(&mut image, &metadata));
     }
 
     let mut image = FileImage {
         file,
         size: source_size,
     };
-    engine::verify(&mut image, catalog, cancel, on_progress)
+    Ok(run(&mut image, &metadata))
 }
 
 fn inspect_ciso<R: Read + Seek>(
