@@ -1,10 +1,10 @@
 //! Deterministic application-runtime boundary for the Nookery game.
 //!
-//! The crate models the lifecycle contracts in src/main.c, src/graph.c,
-//! src/game.c, and src/executor.c without owning a renderer, audio device,
-//! platform, game data, or process-global state. The parent application must
-//! still wire this crate into the real CMake/application path before it can
-//! replace the C main/graph/game path.
+//! The crate owns the ordered lifecycle contracts in src/main.c, src/graph.c,
+//! src/game.c, and src/executor.c at the Rust ABI boundary. Renderer, audio,
+//! platform, game data, and process-global state remain explicit host callback
+//! responsibilities; the PC graph entry now drives those callbacks through
+//! this crate rather than bypassing it with a test-only route.
 
 mod adapters;
 mod error;
@@ -49,6 +49,7 @@ mod tests {
         AudioAdapter, AudioSchedule, Executor, HostErrorCode, Lifecycle, LifecycleState,
         PlatformAdapter, RendererAdapter, Runtime, RuntimeError,
     };
+    use nookery_game::FrameClock;
 
     #[derive(Clone)]
     struct TestPlatform {
@@ -262,6 +263,94 @@ mod tests {
     }
 
     #[test]
+    fn runtime_uses_game_frame_clock_and_executor_order() {
+        let (mut runtime, events) = runtime(false, false);
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_game_init(move |_| {
+            callback_events.borrow_mut().push("game_init");
+            Ok(())
+        });
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_update(move |_, _| {
+            callback_events.borrow_mut().push("update");
+            Ok(())
+        });
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_game_cleanup(move |_| {
+            callback_events.borrow_mut().push("game_cleanup");
+            Ok(())
+        });
+
+        runtime.boot().unwrap();
+        let first = runtime.run_frame(0.5 / 60.0).unwrap();
+        let second = runtime.run_frame(0.5 / 60.0).unwrap();
+        runtime.shutdown().unwrap();
+
+        let mut expected_accumulator = 0.0;
+        assert_eq!(
+            first.audio_ticks,
+            FrameClock::ticks_for_frame(0.5, &mut expected_accumulator).unwrap()
+        );
+        assert_eq!(
+            second.audio_ticks,
+            FrameClock::ticks_for_frame(0.5, &mut expected_accumulator).unwrap()
+        );
+        assert_eq!(runtime.snapshot().audio_accumulator, 0.0);
+        let events = events.borrow();
+        let game_init = events
+            .iter()
+            .position(|event| *event == "game_init")
+            .unwrap();
+        let update = events.iter().position(|event| *event == "update").unwrap();
+        let cleanup = events
+            .iter()
+            .position(|event| *event == "game_cleanup")
+            .unwrap();
+        assert!(game_init < update);
+        assert!(update < cleanup);
+
+        let executor_events = Rc::new(RefCell::new(Vec::new()));
+        let mut executor = Executor::new(false);
+        let event = executor_events.clone();
+        executor.register_constructor(move || {
+            event.borrow_mut().push("constructor-a");
+            Ok(())
+        });
+        let event = executor_events.clone();
+        executor.register_constructor(move || {
+            event.borrow_mut().push("constructor-b");
+            Ok(())
+        });
+        let event = executor_events.clone();
+        executor.register_main(move || {
+            event.borrow_mut().push("main");
+            Ok(())
+        });
+        let event = executor_events.clone();
+        executor.register_destructor(move || {
+            event.borrow_mut().push("destructor-a");
+            Ok(())
+        });
+        let event = executor_events.clone();
+        executor.register_destructor(move || {
+            event.borrow_mut().push("destructor-b");
+            Ok(())
+        });
+        executor.prolog().unwrap();
+        executor.epilog().unwrap();
+        assert_eq!(
+            executor_events.borrow().as_slice(),
+            [
+                "constructor-a",
+                "constructor-b",
+                "main",
+                "destructor-a",
+                "destructor-b"
+            ]
+        );
+    }
+
+    #[test]
     fn reset_is_reachable_and_shutdown_is_clean() {
         let (mut runtime, events) = runtime(true, false);
         let callback_events = events.clone();
@@ -288,6 +377,84 @@ mod tests {
         assert!(events.borrow().contains(&"audio_cleanup"));
         assert!(events.borrow().contains(&"renderer_shutdown"));
         assert!(events.borrow().contains(&"platform_shutdown"));
+    }
+
+    #[test]
+    fn reset_transition_fires_prenmi_once_and_stops_the_frame_loop() {
+        let (mut runtime, events) = runtime(true, false);
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_reset(move |_| {
+            callback_events.borrow_mut().push("reset_callback");
+            Ok(())
+        });
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_prenmi(move |_| {
+            callback_events.borrow_mut().push("prenmi_callback");
+            Ok(())
+        });
+        runtime.set_soft_reset_enabled(true);
+        runtime.boot().unwrap();
+
+        let report = runtime.run_frame(1.0 / 60.0).unwrap();
+        assert!(report.reset_triggered);
+        assert!(report.stopped);
+        assert!(!runtime.snapshot().game.disable_prenmi);
+        assert_eq!(
+            runtime.snapshot().game.next_transition,
+            Some(super::GameTransition::Prenmi)
+        );
+
+        // src/graph.c graph_proc enters graph_main only while game_is_doing, so
+        // a stopped game must not re-enter the frame path or replay callbacks.
+        assert_eq!(
+            runtime.run_frame(1.0 / 60.0),
+            Err(RuntimeError::GameStopped)
+        );
+        assert_eq!(runtime.lifecycle(), Lifecycle::Booted);
+        let count = |event: &str| events.borrow().iter().filter(|e| **e == event).count();
+        assert_eq!(count("reset_callback"), 1);
+        assert_eq!(count("prenmi_callback"), 1);
+    }
+
+    #[test]
+    fn pending_prenmi_transition_defers_while_disable_prenmi_is_set() {
+        let (mut runtime, events) = runtime(true, false);
+        let first_update = Rc::new(RefCell::new(true));
+        let flag = first_update.clone();
+        runtime.callbacks_mut().register_update(move |game, _| {
+            if *flag.borrow() {
+                *flag.borrow_mut() = false;
+                game.disable_prenmi = true;
+            }
+            Ok(())
+        });
+        let callback_events = events.clone();
+        runtime.callbacks_mut().register_prenmi(move |_| {
+            callback_events.borrow_mut().push("prenmi_callback");
+            Ok(())
+        });
+        runtime.set_soft_reset_enabled(true);
+        runtime.boot().unwrap();
+
+        // The game raises disable_prenmi, so graph_main defers the queued
+        // IRQ_RESET_PRENMI transition on the frame the reset was detected.
+        let first = runtime.run_frame(1.0 / 60.0).unwrap();
+        assert!(first.reset_triggered);
+        assert!(!first.stopped);
+        assert_eq!(runtime.snapshot().reset_status, super::ResetStatus::PreNmi);
+
+        // graph_main re-arms disable_prenmi each frame, so the pending
+        // transition completes next frame without a second reset.
+        let second = runtime.run_frame(1.0 / 60.0).unwrap();
+        assert!(!second.reset_triggered);
+        assert!(second.stopped);
+        assert_eq!(
+            runtime.snapshot().game.next_transition,
+            Some(super::GameTransition::Prenmi)
+        );
+        let count = |event: &str| events.borrow().iter().filter(|e| **e == event).count();
+        assert_eq!(count("prenmi_callback"), 1);
+        assert_eq!(count("reset_callback"), 0);
     }
 
     #[test]

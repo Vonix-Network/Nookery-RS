@@ -17,6 +17,9 @@
 #include "dolphin/os.h"
 #include "libforest/osreport.h"
 #include "m_land.h"
+#ifdef TARGET_PC
+#include "acgc/nookery_runtime_adapter.h"
+#endif
 
 // TODO: actually add all the stacks and headers
 
@@ -95,11 +98,12 @@ extern void mainproc(void* val) {
     osSetThreadPri(NULL, 13);
 
 #ifdef TARGET_PC
-    /* On PC, the graph thread was skipped (single-threaded).
-     * Instead of blocking in the message loop, call graph_proc directly. */
-    OSReport("[PC] mainproc: calling graph_proc directly (single-threaded)...\n");
-    graph_proc(val);
-    OSReport("[PC] mainproc: graph_proc returned\n");
+    /* On PC, the graph thread was skipped (single-threaded). The Rust runtime
+     * owns the graph frame lifecycle and reaches the existing source-owned
+     * graph/game/audio phases through its stable callback ABI. */
+    OSReport("[PC] mainproc: calling Rust graph runtime (single-threaded)...\n");
+    acgc_nookery_runtime_graph_proc(val);
+    OSReport("[PC] mainproc: Rust graph runtime returned\n");
     return;
 #else
     do {

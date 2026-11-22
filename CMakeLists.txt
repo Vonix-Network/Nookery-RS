@@ -311,6 +311,7 @@ set(PC_SOURCES
     ${PC_ROOT}/src/acgc_game_editor.cpp
     ${PC_ROOT}/src/acgc_game_editor_host.cpp
     ${PC_ROOT}/src/acgc_game_text.cpp
+    ${PC_ROOT}/src/nookery_runtime_adapter.cpp
 )
 
 # =============================================================================
@@ -510,6 +511,64 @@ target_link_libraries(acgc PRIVATE
     aurora::si
     aurora::vi
 )
+
+# The PC graph path is production-wired through the Rust runtime ABI. The C
+# graph source remains compiled because it still supplies the source-owned
+# display-list/task phases called by the ABI callbacks; no oracle symbols are
+# removed until a replacement has a fresh native link and parity evidence.
+find_program(NOOKERY_RUNTIME_CARGO_EXECUTABLE cargo REQUIRED)
+set(NOOKERY_RUNTIME_CARGO_TARGET_DIR "${CMAKE_BINARY_DIR}/nookery-runtime-cargo")
+set(NOOKERY_RUNTIME_RUST_LIBRARY
+    "${NOOKERY_RUNTIME_CARGO_TARGET_DIR}/release/libnookery_runtime.so")
+file(GLOB_RECURSE NOOKERY_RUNTIME_RUST_SOURCES CONFIGURE_DEPENDS
+    "${DECOMP_ROOT}/rust/nookery-runtime/src/*.rs"
+    "${DECOMP_ROOT}/rust/nookery-game/src/*.rs"
+    "${DECOMP_ROOT}/rust/nookery-graph/src/*.rs"
+)
+add_custom_command(
+    OUTPUT "${NOOKERY_RUNTIME_RUST_LIBRARY}"
+    COMMAND ${CMAKE_COMMAND} -E env
+        "CARGO_TARGET_DIR=${NOOKERY_RUNTIME_CARGO_TARGET_DIR}"
+        "${NOOKERY_RUNTIME_CARGO_EXECUTABLE}" build --release --locked
+        --manifest-path "${DECOMP_ROOT}/rust/Cargo.toml"
+        --package nookery-runtime
+    DEPENDS ${NOOKERY_RUNTIME_RUST_SOURCES}
+        "${DECOMP_ROOT}/rust/Cargo.toml"
+        "${DECOMP_ROOT}/rust/Cargo.lock"
+    COMMENT "Building the production nookery-runtime shared library"
+    VERBATIM
+)
+add_custom_target(nookery-runtime-sharedlib DEPENDS "${NOOKERY_RUNTIME_RUST_LIBRARY}")
+add_library(nookery_runtime_shared SHARED IMPORTED GLOBAL)
+set_target_properties(nookery_runtime_shared PROPERTIES
+    IMPORTED_LOCATION "${NOOKERY_RUNTIME_RUST_LIBRARY}"
+    IMPORTED_NO_SONAME TRUE
+    INTERFACE_INCLUDE_DIRECTORIES "${PC_ROOT}/include"
+)
+add_dependencies(nookery_runtime_shared nookery-runtime-sharedlib)
+target_link_libraries(acgc PRIVATE nookery_runtime_shared)
+if (UNIX)
+    find_package(Threads REQUIRED)
+    target_link_libraries(acgc PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+endif ()
+if (APPLE)
+    set(NOOKERY_RUNTIME_RELATIVE_RPATH "@loader_path")
+elseif (UNIX)
+    set(NOOKERY_RUNTIME_RELATIVE_RPATH "\$ORIGIN")
+endif ()
+add_custom_command(TARGET acgc POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:nookery_runtime_shared>"
+        "$<TARGET_FILE_DIR:acgc>"
+    COMMENT "Copying the production nookery-runtime image beside acgc"
+    VERBATIM
+)
+if (NOOKERY_RUNTIME_RELATIVE_RPATH)
+    set_property(TARGET acgc APPEND PROPERTY
+        BUILD_RPATH "${NOOKERY_RUNTIME_RELATIVE_RPATH}")
+    set_property(TARGET acgc APPEND PROPERTY
+        INSTALL_RPATH "${NOOKERY_RUNTIME_RELATIVE_RPATH}")
+endif ()
 
 if (ENABLE_DATA_FFI_PARITY)
     if (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)

@@ -47,7 +47,7 @@ static float graph_audio_accum;
 #define CONSTRUCT_THA_GA(tha_ga, name, name2) (THA_GA_ct((tha_ga), sys_dynamic.##name, ##name2##_SIZE * sizeof(Gfx)))
 #endif
 
-static void graph_setup_double_buffer(GRAPH* this) {
+void graph_setup_double_buffer(GRAPH* this) {
     bzero(&sys_dynamic, sizeof(dynamic_t));
     sys_dynamic.start_magic = SYSDYNAMIC_START_MAGIC;
     sys_dynamic.end_magic = SYSDYNAMIC_END_MAGIC;
@@ -76,7 +76,7 @@ static void graph_setup_double_buffer(GRAPH* this) {
 }
 
 #define ARE_INIT_PROCS_EQUAL(proc0, proc1) (((void (*)(GAME*))proc0) == ((void (*)(GAME*))proc1))
-static DLFTBL_GAME* game_get_next_game_dlftbl(GAME* game) {
+void* graph_get_next_game_dlftbl(GAME* game) {
     void (*next_game_init_proc)(GAME*) = game_get_next_game_init(game);
 
     if (ARE_INIT_PROCS_EQUAL(next_game_init_proc, first_game_init)) {
@@ -159,7 +159,7 @@ int graph_dt_frame_phase(GAME* game, int period_frames) {
     return (int)graph_dt_frame_time(game) % period_frames;
 }
 
-static void graph_task_set00(GRAPH* this) {
+void graph_task_set00(GRAPH* this) {
     TracyCZone(graph_task_zone, 1);
     ucode_info ucode[2];
 
@@ -190,7 +190,7 @@ static void graph_task_set00(GRAPH* this) {
     TracyCZoneEnd(graph_task_zone);
 }
 
-static int graph_draw_finish(GRAPH* this) {
+int graph_draw_finish(GRAPH* this) {
     TracyCZone(graph_draw_finish_zone, 1);
     int err;
     OPEN_DISP(this);
@@ -444,7 +444,7 @@ extern void graph_proc(void* arg) {
             TracyCFrameMark;
         }
 
-        dlftbl = game_get_next_game_dlftbl(game);
+        dlftbl = graph_get_next_game_dlftbl(game);
         GRAPH_SET_DOING_POINT(__graph, GAME_18);
         GRAPH_SET_DOING_POINT(__graph, GAME_DT);
         game_dt(game);
