@@ -1,90 +1,125 @@
-use nookery_audio::{AudioCommand, AudioCommandQueue, QueueError, StereoFrame, StereoRing};
+use std::sync::atomic::{AtomicU32, Ordering};
 
-fn frame(value: i16) -> StereoFrame {
-    StereoFrame {
-        left: value,
-        right: -value,
-    }
+use nookery_audio::{
+    AUDIO_BYTES_PER_SAMPLE, AUDIO_QUEUE_CAPACITY_BYTES, AUDIO_QUEUE_CAPACITY_S16,
+    AUDIO_SAMPLE_RATE_HZ, AudioState, dispatch_callbacks,
+};
+
+#[test]
+fn audio_contract_starts_at_32khz() {
+    assert_eq!(AUDIO_SAMPLE_RATE_HZ, 32_000);
+    assert_eq!(AUDIO_BYTES_PER_SAMPLE, 4);
 }
 
 #[test]
-fn fifo_order_and_partial_reads_are_exact() {
-    let mut ring = StereoRing::new(4);
-    assert_eq!(
-        ring.push(&[frame(1), frame(2), frame(3)]).accepted_frames,
-        3
+fn dma_accounting_rejects_zero_invalid_and_overfill() {
+    let mut state = AudioState::new();
+    assert!(!state.accept_dma(0, 0, 4));
+    assert!(!state.accept_dma(-1, 1, 4));
+    assert!(!state.accept_dma(0, 1, 0));
+    assert!(state.accept_dma(0, 1, 10));
+    assert_eq!(state.bytes_written(), 10);
+    assert_eq!(state.stream_sample_count(), 2);
+
+    let mut boundary = AudioState::new();
+    assert!(boundary.accept_dma((AUDIO_QUEUE_CAPACITY_BYTES - 4) as i32, 1, 4));
+    assert!(!boundary.accept_dma((AUDIO_QUEUE_CAPACITY_BYTES - 3) as i32, 1, 4));
+    assert_eq!(boundary.bytes_written(), 4);
+}
+
+static CALLBACK_ORDER: AtomicU32 = AtomicU32::new(0);
+static STREAM_COUNT: AtomicU32 = AtomicU32::new(0);
+
+unsafe extern "C" fn dma_callback() {
+    assert_eq!(CALLBACK_ORDER.swap(1, Ordering::SeqCst), 0);
+}
+
+unsafe extern "C" fn replacement_dma_callback() {
+    assert_eq!(CALLBACK_ORDER.swap(3, Ordering::SeqCst), 0);
+}
+
+unsafe extern "C" fn stream_callback(count: u32) {
+    assert_eq!(CALLBACK_ORDER.load(Ordering::SeqCst), 3);
+    STREAM_COUNT.store(count, Ordering::SeqCst);
+}
+
+#[test]
+fn callback_replacement_returns_previous_and_dispatches_in_order() {
+    let mut state = AudioState::new();
+    assert!(state.replace_dma_callback(Some(dma_callback)).is_none());
+    let previous = state.replace_dma_callback(Some(replacement_dma_callback));
+    assert!(previous.is_some());
+    // The returned pointer is the callback that was replaced.
+    CALLBACK_ORDER.store(0, Ordering::SeqCst);
+    // SAFETY: `previous` came directly from the registration slot above.
+    unsafe { previous.expect("previous DMA callback")() };
+    assert_eq!(CALLBACK_ORDER.load(Ordering::SeqCst), 1);
+    assert!(
+        state
+            .replace_stream_callback(Some(stream_callback))
+            .is_none()
     );
-
-    let mut first = [StereoFrame::SILENCE; 2];
-    ring.pop(&mut first);
-    assert_eq!(first, [frame(1), frame(2)]);
-
-    assert_eq!(ring.push(&[frame(4), frame(5)]).accepted_frames, 2);
-    let mut second = [StereoFrame::SILENCE; 3];
-    ring.pop(&mut second);
-    assert_eq!(second, [frame(3), frame(4), frame(5)]);
-    assert!(ring.is_empty());
+    CALLBACK_ORDER.store(0, Ordering::SeqCst);
+    STREAM_COUNT.store(0, Ordering::SeqCst);
+    // SAFETY: These are valid callbacks defined immediately above.
+    unsafe {
+        dispatch_callbacks(
+            state.replace_dma_callback(None),
+            state.replace_stream_callback(None),
+            7,
+        )
+    };
+    assert_eq!(CALLBACK_ORDER.load(Ordering::SeqCst), 3);
+    assert_eq!(STREAM_COUNT.load(Ordering::SeqCst), 7);
 }
 
 #[test]
-fn underflow_returns_silence_and_counts_frames() {
-    let mut ring = StereoRing::new(2);
-    let mut output = [frame(9); 3];
-    ring.pop(&mut output);
-    assert_eq!(output, [StereoFrame::SILENCE; 3]);
-    assert_eq!(ring.underflow_frames(), 3);
+fn master_volume_and_host_lifecycle_are_bounded_and_stateful() {
+    let mut state = AudioState::new();
+    assert_eq!(state.set_master_volume(-1), 0);
+    assert_eq!(state.set_master_volume(101), 100);
+    assert_eq!(state.master_volume(), 100);
+    state.host_initialized();
+    assert!(state.host_active());
+    assert!(state.host_paused());
+    state.host_started();
+    assert!(!state.host_paused());
+    state.host_stopped();
+    assert!(state.host_paused());
+    state.host_shutdown();
+    assert!(!state.host_active());
+    assert!(!state.host_paused());
 }
 
 #[test]
-fn overflow_drops_newest_and_counts_frames() {
-    let mut ring = StereoRing::new(2);
-    let report = ring.push(&[frame(1), frame(2), frame(3)]);
-    assert_eq!(report.accepted_frames, 2);
-    assert_eq!(report.dropped_frames, 1);
-    assert_eq!(ring.dropped_frames(), 1);
+fn ai_state_getters_setters_and_reset_semantics_match_oracle() {
+    let mut state = AudioState::new();
+    state.set_dsp_sample_rate(1);
+    state.set_stream_sample_rate(1);
+    state.set_stream_trigger(44);
+    state.set_stream_play_state(1);
+    state.set_stream_volume_left(12);
+    state.set_stream_volume_right(34);
+    assert_eq!(state.dsp_sample_rate(), 1);
+    assert_eq!(state.stream_sample_rate(), 1);
+    assert_eq!(state.stream_trigger(), 44);
+    assert_eq!(state.stream_play_state(), 1);
+    assert_eq!(state.stream_volume_left(), 0xff);
+    assert_eq!(state.stream_volume_right(), 0xff);
 
-    let mut output = [StereoFrame::SILENCE; 2];
-    ring.pop(&mut output);
-    assert_eq!(output, [frame(1), frame(2)]);
+    state.record_dma(8);
+    state.reset_stream_sample_count();
+    assert_eq!(state.stream_sample_count(), 0);
+    state.host_initialized();
+    state.host_shutdown();
+    assert_eq!(state.dsp_sample_rate(), 1);
+    assert_eq!(state.stream_trigger(), 44);
 }
 
 #[test]
-fn shutdown_clears_pending_commands() {
-    let mut queue = AudioCommandQueue::new(2);
-    queue.try_push(AudioCommand::UpdateDac).unwrap();
-    queue.try_push(AudioCommand::DspSync).unwrap();
-    queue.shutdown();
-
-    assert_eq!(queue.len(), 0);
-    assert_eq!(queue.stats().cleared_commands, 2);
-    assert_eq!(queue.try_pop(), Err(QueueError::Shutdown));
-    assert_eq!(
-        queue.try_push(AudioCommand::NeosSync),
-        Err(QueueError::Shutdown)
-    );
-
-    queue.reset();
-    assert_eq!(queue.try_push(AudioCommand::NeosSync), Ok(()));
-    assert_eq!(queue.try_pop(), Ok(AudioCommand::NeosSync));
-}
-
-#[test]
-fn capacity_and_wraparound_preserve_order() {
-    let mut ring = StereoRing::new(3);
-    assert_eq!(ring.capacity(), 3);
-    assert_eq!(
-        ring.push(&[frame(1), frame(2), frame(3), frame(4)])
-            .dropped_frames,
-        1
-    );
-
-    let mut first = [StereoFrame::SILENCE; 2];
-    ring.pop(&mut first);
-    assert_eq!(first, [frame(1), frame(2)]);
-    assert_eq!(ring.push(&[frame(5), frame(6)]).accepted_frames, 2);
-
-    let mut rest = [StereoFrame::SILENCE; 3];
-    ring.pop(&mut rest);
-    assert_eq!(rest, [frame(3), frame(5), frame(6)]);
-    assert_eq!(ring.len(), 0);
+fn refill_stops_on_no_progress_and_fill_is_bounded_in_s16_units() {
+    assert_eq!(AudioState::refill_remaining(16, 10, 18), Some(8));
+    assert_eq!(AudioState::refill_remaining(16, 10, 10), None);
+    assert_eq!(AudioState::refill_remaining(0, 10, 18), None);
+    assert_eq!(AUDIO_QUEUE_CAPACITY_S16, 128_000);
 }
