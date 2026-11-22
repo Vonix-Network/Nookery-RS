@@ -1,8 +1,14 @@
 //! Rust implementation of the nookery game frame and executor semantics.
 
 mod controller;
+mod lifecycle;
 
 pub use controller::{ControllerInput, ControllerState, STICK_MAX, STICK_MIN};
+pub use lifecycle::{
+    CleanupCallback, FirstGameInitializer, GAME_FRAME, GAME_HYRAL_SIZE, GAME_SECOND_SIZE, Game,
+    GameGlobals, GameLifecycleHooks, GameVersion, GraphState, LifecycleError, LifecyclePhase,
+    NextGame, SaveChannelCallback,
+};
 
 use std::error::Error;
 use std::fmt;
