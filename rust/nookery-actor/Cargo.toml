@@ -1,0 +1,11 @@
+[package]
+name = "nookery-actor"
+version = "0.1.0"
+description = "Pure Rust balloon actor lifecycle candidate, source-grounded in ac_balloon.c"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
