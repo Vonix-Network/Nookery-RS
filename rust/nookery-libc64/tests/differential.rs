@@ -1,113 +1,164 @@
-//! Differential tests against the exact `src/static/libc64/qrand.c` source.
+//! Differential test against the real `libc64` C sources and repository headers.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use nookery_libc64::QrandState;
+use nookery_libc64::{SleepOperation, c_sleep_operations, facos, fatan2, libc64_fsqrt};
 
-const SEEDS: [u32; 6] = [0, 1, u32::MAX, 0x8000_0000, 0xffff_fffe, 0x1234_5678];
-
-fn workspace_root() -> PathBuf {
+fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(Path::parent)
-        .expect("workspace root")
-        .to_owned()
+        .expect("crate is under repo/rust")
+        .to_path_buf()
 }
 
-fn rust_transcript() -> String {
-    let mut output = String::new();
-    for seed in SEEDS {
-        let mut state = QrandState::new(seed);
-        output.push_str(&format!("u {seed:08x}"));
-        for _ in 0..16 {
-            output.push_str(&format!(" {:08x}", state.qrand()));
-        }
-        output.push('\n');
+fn oracle_output() -> String {
+    let root = repo_root();
+    let work = tempfile_dir();
+    let binary = work.join("oracle");
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/oracle.c");
+    let status = Command::new(std::env::var_os("CC").unwrap_or_else(|| "gcc".into()))
+        .args([
+            "-std=c11",
+            "-O0",
+            "-DTARGET_PC=1",
+            "-DVERSION=0",
+            "-I",
+            "include",
+            "-I",
+            "libs/dolphin/include",
+            "-w",
+            "-o",
+        ])
+        .arg(&binary)
+        .arg(&source)
+        .arg(root.join("src/static/libc64/math64.c"))
+        .arg(root.join("src/static/libc64/sleep.c"))
+        .arg("-lm")
+        .current_dir(&root)
+        .status()
+        .expect("compile the C oracle");
+    assert!(status.success(), "C oracle compilation failed");
 
-        let mut state = QrandState::new(seed);
-        output.push_str(&format!("f {seed:08x}"));
-        for i in 0..12 {
-            let bits = if i & 1 == 0 {
-                state.fqrand().to_bits()
-            } else {
-                state.fqrand2().to_bits()
-            };
-            output.push_str(&format!(" {bits:08x}"));
+    let output = Command::new(&binary).output().expect("run the C oracle");
+    assert!(
+        output.status.success(),
+        "C oracle failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let _ = std::fs::remove_dir_all(&work);
+    String::from_utf8(output.stdout).expect("C oracle output is UTF-8")
+}
+
+fn tempfile_dir() -> PathBuf {
+    let path = std::env::temp_dir().join(format!("nookery-libc64-oracle-{}", std::process::id()));
+    std::fs::create_dir_all(&path).expect("create oracle temp directory");
+    path
+}
+
+fn rust_output() -> String {
+    let mut output = String::new();
+    use std::fmt::Write as _;
+    use std::mem::{offset_of, size_of};
+
+    writeln!(
+        &mut output,
+        "layout.queue {} {} {} {} {} {} {}",
+        size_of::<nookery_libc64::OsMessageQueue>(),
+        offset_of!(nookery_libc64::OsMessageQueue, queue_send),
+        offset_of!(nookery_libc64::OsMessageQueue, queue_receive),
+        offset_of!(nookery_libc64::OsMessageQueue, msg_array),
+        offset_of!(nookery_libc64::OsMessageQueue, msg_count),
+        offset_of!(nookery_libc64::OsMessageQueue, first_index),
+        offset_of!(nookery_libc64::OsMessageQueue, used_count),
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "layout.alarm {} {} {} {} {} {} {}",
+        size_of::<nookery_libc64::OsAlarm>(),
+        offset_of!(nookery_libc64::OsAlarm, handler),
+        offset_of!(nookery_libc64::OsAlarm, fire),
+        offset_of!(nookery_libc64::OsAlarm, prev),
+        offset_of!(nookery_libc64::OsAlarm, next),
+        offset_of!(nookery_libc64::OsAlarm, period),
+        offset_of!(nookery_libc64::OsAlarm, start),
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "layout.timer {} {} {} {} {} {} {} {}",
+        size_of::<nookery_libc64::OsTimer>(),
+        offset_of!(nookery_libc64::OsTimer, alarm),
+        offset_of!(nookery_libc64::OsTimer, next),
+        offset_of!(nookery_libc64::OsTimer, prev),
+        offset_of!(nookery_libc64::OsTimer, interval),
+        offset_of!(nookery_libc64::OsTimer, value),
+        offset_of!(nookery_libc64::OsTimer, mq),
+        offset_of!(nookery_libc64::OsTimer, msg),
+    )
+    .unwrap();
+
+    let values = [
+        0x00000000u32,
+        0x80000000,
+        0x3f800000,
+        0xbf800000,
+        0x40000000,
+        0xc0000000,
+        0x7f800000,
+    ];
+    for &x_bits in &values {
+        let x = f32::from_bits(x_bits);
+        let mut line = |name: &str, bits: u32, value: f32| {
+            writeln!(&mut output, "{name} {bits:08x} {:08x}", value.to_bits()).unwrap();
+        };
+        line("fsqrt", x_bits, libc64_fsqrt(x));
+        line("facos", x_bits, facos(x));
+        for &y_bits in &values {
+            line("fatan2", x_bits ^ y_bits, fatan2(x, f32::from_bits(y_bits)));
         }
-        output.push('\n');
+    }
+
+    for countdown in [-1, 0, 1, 7, i64::MAX] {
+        for operation in c_sleep_operations(countdown) {
+            match operation {
+                SleepOperation::CreateMessageQueue {
+                    msg_count,
+                    message_buffered,
+                } => writeln!(
+                    &mut output,
+                    "sleep.create {} {msg_count}",
+                    i32::from(message_buffered)
+                )
+                .unwrap(),
+                SleepOperation::SetTimer {
+                    countdown,
+                    interval,
+                    message_is_null,
+                } => writeln!(
+                    &mut output,
+                    "sleep.set {countdown} {interval} {}",
+                    i32::from(message_is_null)
+                )
+                .unwrap(),
+                SleepOperation::ReceiveMessage {
+                    flags,
+                    output_is_null,
+                } => writeln!(
+                    &mut output,
+                    "sleep.recv {} {flags}",
+                    i32::from(output_is_null)
+                )
+                .unwrap(),
+            }
+        }
     }
     output
 }
 
-struct TempDir(PathBuf);
-
-impl TempDir {
-    fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "nookery-libc64-oracle-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        ));
-        std::fs::create_dir(&path).expect("create oracle temp directory");
-        Self(path)
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
 #[test]
-fn transcript_matches_the_unmodified_qrand_source() {
-    let root = workspace_root();
-    let source = root.join("src/static/libc64/qrand.c");
-    let header_root = root.join("include");
-    let driver = Path::new(env!("CARGO_MANIFEST_DIR")).join("parity/driver.c");
-    let parity_include = Path::new(env!("CARGO_MANIFEST_DIR")).join("parity/include");
-    assert!(
-        source.is_file(),
-        "missing oracle source: {}",
-        source.display()
-    );
-    assert!(
-        driver.is_file(),
-        "missing differential driver: {}",
-        driver.display()
-    );
-
-    let temp = TempDir::new();
-    let binary = temp.0.join("qrand_oracle");
-    let compiler = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
-    let compile = Command::new(&compiler)
-        .args(["-std=c11", "-O0", "-Wall", "-Wextra", "-Werror"])
-        .arg("-I")
-        .arg(&parity_include)
-        .arg("-I")
-        .arg(&header_root)
-        .arg("-o")
-        .arg(&binary)
-        .arg(&driver)
-        .arg(&source)
-        .output()
-        .unwrap_or_else(|error| panic!("run C compiler {compiler:?}: {error}"));
-    assert!(
-        compile.status.success(),
-        "oracle compilation failed:\n{}",
-        String::from_utf8_lossy(&compile.stderr)
-    );
-
-    let oracle = Command::new(&binary).output().expect("run qrand oracle");
-    assert!(
-        oracle.status.success(),
-        "qrand oracle failed:\n{}",
-        String::from_utf8_lossy(&oracle.stderr)
-    );
-    let oracle = String::from_utf8(oracle.stdout).expect("oracle is UTF-8");
-    assert_eq!(oracle, rust_transcript());
+fn rust_matches_real_math64_and_sleep_sources() {
+    assert_eq!(rust_output(), oracle_output());
 }
