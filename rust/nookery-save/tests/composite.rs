@@ -97,6 +97,87 @@ fn full_save_walker_hits_source_anchored_families_and_round_trips() {
     assert_eq!(bytes, original);
 }
 
+/// `swap_mHm_lyr` swaps `UT_Z_NUM * UT_X_NUM` (16 * 16) furniture `u16`
+/// slots, i.e. the whole `items[0][0..0x200]` span of `mHm_lyr_c`, not just
+/// the first 64. A slot above index 63 must therefore convert in both
+/// directions while the surrounding structure bytes stay byte-exact.
+#[test]
+fn home_layer_furniture_converts_all_256_ut_slots_and_keeps_neighbours() {
+    // `mHm_hs_c` #0 is at 0x9CE8; `floors[0]` at +0x38; `layer_main` at +0x000.
+    const HOME: usize = 0x9CE8;
+    const LAYER: usize = HOME + 0x38;
+    const LAYER_SIZE: usize = 0x228;
+
+    assert_eq!(nookery_save::composite::HOME_LAYER_ITEM_COUNT, 256);
+
+    let mut bytes = vec![0u8; nookery_save::SAVE_SIZE];
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        *byte = (index as u8).wrapping_mul(41).wrapping_add(0x5D);
+    }
+
+    // Slot 64 is the first slot the pre-fix 64-item walk skipped; 255 is the
+    // last `u16` of the `items[16][16]` array.
+    let seeded = [
+        (0usize, 0x1234u16),
+        (63, 0x00FF),
+        (64, 0xABCD),
+        (100, 0x5A5A),
+        (255, 0xFE01),
+    ];
+    for (slot, value) in seeded {
+        let at = LAYER + slot * 2;
+        bytes[at..at + 2].copy_from_slice(&value.to_be_bytes());
+    }
+    // Neighbouring `mHm_lyr_c` fields the oracle also swaps.
+    bytes[LAYER + 0x200..LAYER + 0x208].copy_from_slice(&0x0102_0304_0506_0708u64.to_be_bytes());
+    for index in 0..8usize {
+        let at = LAYER + 0x208 + index * 4;
+        bytes[at..at + 4].copy_from_slice(&(0x1111_0000u32 + index as u32).to_be_bytes());
+    }
+    let original = bytes.clone();
+
+    swap_save_t_verified(&mut bytes, SwapDirection::FromBigEndian).expect("BE home save");
+
+    for (slot, value) in seeded {
+        let at = LAYER + slot * 2;
+        assert_eq!(
+            &bytes[at..at + 2],
+            &value.to_le_bytes(),
+            "home layer item slot {slot} must convert"
+        );
+    }
+    let mut ftr_switch = 0x0102_0304_0506_0708u64.to_be_bytes();
+    ftr_switch.reverse();
+    assert_eq!(&bytes[LAYER + 0x200..LAYER + 0x208], &ftr_switch[..]);
+    for index in 0..8usize {
+        let at = LAYER + 0x208 + index * 4;
+        assert_eq!(
+            &bytes[at..at + 4],
+            &(0x1111_0000u32 + index as u32).to_le_bytes(),
+            "haniwa_step[{index}] must convert"
+        );
+    }
+
+    // Second layer's first slot is a different `mHm_lyr_c`; it converts too,
+    // which pins the layer stride at `sizeof(mHm_lyr_c)`.
+    let next_layer = LAYER + LAYER_SIZE;
+    assert_eq!(
+        &bytes[next_layer..next_layer + 2],
+        &[original[next_layer + 1], original[next_layer]]
+    );
+
+    // Unswapped home bytes adjacent to the walk: `unk_14`/`haniwa_tempo`
+    // (0x14..0x1C) and the palette/`unk_30` span (0x2C..0x38).
+    assert_eq!(
+        &bytes[HOME + 0x14..HOME + 0x1C],
+        &original[HOME + 0x14..HOME + 0x1C]
+    );
+    assert_eq!(&bytes[HOME + 0x2C..LAYER], &original[HOME + 0x2C..LAYER]);
+
+    swap_save_t_verified(&mut bytes, SwapDirection::ToBigEndian).expect("LE home save");
+    assert_eq!(bytes, original);
+}
+
 #[test]
 fn legacy_save_walker_uses_legacy_union_and_post_office_order() {
     let errand_id = SAVE_PRIVATE_OFFSET + 0x2EC + 0x2C;

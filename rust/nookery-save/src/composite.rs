@@ -60,6 +60,9 @@ pub const SAVE_PRIVATE_OFFSET: usize = 0x20;
 pub const SAVE_LAND_INFO_OFFSET: usize = 0x9120;
 /// The `Save_t.save_check.checksum` offset.
 pub const SAVE_CHECKSUM_OFFSET: usize = 0x12;
+/// `UT_Z_NUM * UT_X_NUM` (`include/m_field_make.h`): the `u16` furniture slots
+/// covered by one `mHm_lyr_c.items`, i.e. the `0x000..0x200` span.
+pub const HOME_LAYER_ITEM_COUNT: usize = 256;
 
 /// Byte-order direction used by the C `pc_bswap_dir_t` API.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -811,7 +814,7 @@ fn swap_notice_free_layer(
     offset: usize,
     direction: SwapDirection,
 ) -> Result<(), GciError> {
-    for index in 0..64 {
+    for index in 0..HOME_LAYER_ITEM_COUNT {
         swap_u16(bytes, offset + index * 2)?;
     }
     swap_u64(bytes, offset + 0x200)?;
