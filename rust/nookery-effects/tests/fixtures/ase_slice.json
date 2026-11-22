@@ -1,0 +1,25 @@
+{
+  "effect": "ASE",
+  "child": "ASE_CH",
+  "source": [
+    "src/effect/ef_ase.c",
+    "src/effect/ef_ase_ch.c",
+    "src/effect/ef_effect_control.c"
+  ],
+  "active_slots": 100,
+  "parent_timer": 26,
+  "child_timer": 20,
+  "continuous_timer": 52,
+  "catch_up_cap": 4,
+  "child_spawn": "parent_timer_odd",
+  "child_death": "lifetime_le_zero_or_timer_le_zero",
+  "public_inputs": [
+    "effect_id",
+    "position",
+    "priority",
+    "angle",
+    "item_name",
+    "arg0",
+    "arg1"
+  ]
+}
