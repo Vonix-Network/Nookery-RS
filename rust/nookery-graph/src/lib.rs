@@ -15,6 +15,10 @@
 use std::error::Error;
 use std::fmt;
 
+/// `GRAPH_BASE_FRAME_RATE` and the default tick cap in `src/graph.c`.
+pub const GRAPH_BASE_FRAME_RATE: f64 = 60.0;
+pub const GRAPH_DT_TICK_CAP: i32 = 4;
+
 /// The source `GRAPH_DOING_POINT` values, retained so lifecycle observations
 /// have the same vocabulary as `include/graph.h`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,7 +109,7 @@ impl Default for GraphClock {
     fn default() -> Self {
         // `graph_ct` assigns FRAMES_TO_SECONDS(1.0f), 1.0f, and 0.0.
         Self {
-            dt: 1.0 / 60.0,
+            dt: 1.0 / GRAPH_BASE_FRAME_RATE,
             dt_num_60fps_frames: 1.0,
             dt_total_60fps_frames: 0.0,
         }
@@ -119,12 +123,12 @@ impl GraphClock {
     /// is in use. The source clamps a stalled frame to four 60-Hz units and
     /// derives the clamped seconds value from that unit count.
     pub fn advance(&mut self, delta_seconds: f64) {
-        let mut delta_60fps_frames = delta_seconds * 60.0;
+        let mut delta_60fps_frames = delta_seconds * GRAPH_BASE_FRAME_RATE;
         let mut delta_seconds = delta_seconds;
 
-        if delta_60fps_frames > 4.0 {
-            delta_60fps_frames = 4.0;
-            delta_seconds = delta_60fps_frames / 60.0;
+        if delta_60fps_frames > GRAPH_DT_TICK_CAP as f64 {
+            delta_60fps_frames = GRAPH_DT_TICK_CAP as f64;
+            delta_seconds = delta_60fps_frames / GRAPH_BASE_FRAME_RATE;
         }
 
         self.dt = delta_seconds;
@@ -136,6 +140,50 @@ impl GraphClock {
     pub fn reset(&mut self) {
         *self = Self::default();
     }
+}
+
+/// Exact pure counterpart of `graph_dt_60hz_ticks` in `src/graph.c`.
+///
+/// The default cap is deliberately fixed at the source's four ticks. The
+/// platform speedhack branch is not part of this lane and is not an implicit
+/// input to the Rust API.
+pub fn graph_dt_60hz_ticks(dt_num_60fps_frames: f64, accum: &mut f32) -> i32 {
+    *accum += dt_num_60fps_frames as f32;
+    let ticks = *accum as i32;
+    *accum -= ticks as f32;
+    ticks.min(GRAPH_DT_TICK_CAP)
+}
+
+/// Exact pure counterpart of `graph_dt_period_elapsed` in `src/graph.c`.
+pub fn graph_dt_period_elapsed(
+    dt_num_60fps_frames: f64,
+    accum: &mut f32,
+    period_frames: f32,
+) -> i32 {
+    *accum += dt_num_60fps_frames as f32;
+    if *accum >= period_frames {
+        *accum -= period_frames;
+        if *accum > period_frames * 4.0 {
+            *accum = 0.0;
+        }
+        1
+    } else {
+        0
+    }
+}
+
+/// Exact pure counterpart of `graph_dt_frame_time` in `src/graph.c`.
+pub fn graph_dt_frame_time(clock: &GraphClock) -> f64 {
+    clock.dt_total_60fps_frames
+}
+
+/// Exact pure counterpart of `graph_dt_frame_phase` in `src/graph.c`.
+pub fn graph_dt_frame_phase(clock: &GraphClock, period_frames: i32) -> i32 {
+    if period_frames <= 0 {
+        return 0;
+    }
+
+    (graph_dt_frame_time(clock) as i32) % period_frames
 }
 
 /// Source-observable lifecycle state retained by the bounded graph seam.
@@ -249,6 +297,46 @@ pub struct Graph {
     pub state: GraphState,
 }
 
+/// Renderer/OS work intentionally remains a callback boundary. These hooks
+/// name the source operations without pretending that display-list pointers,
+/// task queues, or renderer ABI details have moved into Rust.
+pub trait GraphFrameCallbacks {
+    type Error;
+
+    fn game_main(&mut self) -> Result<(), Self::Error>;
+    fn draw_finish(&mut self) -> Result<bool, Self::Error>;
+    fn task_set(&mut self) -> Result<(), Self::Error>;
+    fn wait_task(&mut self) -> Result<(), Self::Error>;
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum GraphCallbackStage {
+    GameMain,
+    DrawFinish,
+    TaskSet,
+    WaitTask,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum GraphExecutionError<E> {
+    Lifecycle(GraphLifecycleError),
+    Callback {
+        stage: GraphCallbackStage,
+        source: E,
+    },
+}
+
+impl<E: fmt::Debug> fmt::Display for GraphExecutionError<E> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Lifecycle(error) => error.fmt(formatter),
+            Self::Callback { stage, .. } => write!(formatter, "graph callback failed at {stage:?}"),
+        }
+    }
+}
+
+impl<E: fmt::Debug + 'static> Error for GraphExecutionError<E> {}
+
 impl Graph {
     /// Begin a graph lifetime and reset its source construction fields.
     pub fn begin(&mut self) -> Result<(), GraphLifecycleError> {
@@ -264,6 +352,52 @@ impl Graph {
         }
         self.clock.advance(delta_seconds);
         self.state.proc()
+    }
+
+    /// Source-order frame seam for `graph_main` in `src/graph.c`.
+    pub fn run_frame<C: GraphFrameCallbacks>(
+        &mut self,
+        delta_seconds: f64,
+        callbacks: &mut C,
+    ) -> Result<(), GraphExecutionError<C::Error>> {
+        self.proc(delta_seconds)
+            .map_err(GraphExecutionError::Lifecycle)?;
+        callbacks
+            .game_main()
+            .map_err(|source| GraphExecutionError::Callback {
+                stage: GraphCallbackStage::GameMain,
+                source,
+            })?;
+        self.state.doing_point = GraphDoingPoint::GameMainFinished;
+
+        let draw_succeeded =
+            callbacks
+                .draw_finish()
+                .map_err(|source| GraphExecutionError::Callback {
+                    stage: GraphCallbackStage::DrawFinish,
+                    source,
+                })?;
+        if draw_succeeded {
+            self.state.doing_point = GraphDoingPoint::TaskSet;
+            callbacks
+                .task_set()
+                .map_err(|source| GraphExecutionError::Callback {
+                    stage: GraphCallbackStage::TaskSet,
+                    source,
+                })?;
+            self.state.doing_point = GraphDoingPoint::WaitTask;
+            callbacks
+                .wait_task()
+                .map_err(|source| GraphExecutionError::Callback {
+                    stage: GraphCallbackStage::WaitTask,
+                    source,
+                })?;
+            self.state.doing_point = GraphDoingPoint::WaitTaskFinished;
+            self.state.doing_point = GraphDoingPoint::TaskSetFinished;
+            self.state.frame_counter = self.state.frame_counter.wrapping_add(1);
+        }
+        self.state.lifecycle = GraphLifecycle::Running;
+        Ok(())
     }
 
     pub fn finish_frame(&mut self, display_completed: bool) -> Result<(), GraphLifecycleError> {
@@ -288,6 +422,7 @@ pub enum ExecutorLifecycle {
     New,
     Running,
     Exited,
+    Failed,
 }
 
 /// Errors for repeated or out-of-order executor hook calls.
@@ -296,6 +431,7 @@ pub enum ExecutorLifecycleError {
     PrologAlreadyCalled,
     EpilogBeforeProlog,
     EpilogAlreadyCalled,
+    EpilogAfterFailure,
 }
 
 impl fmt::Display for ExecutorLifecycleError {
@@ -304,6 +440,7 @@ impl fmt::Display for ExecutorLifecycleError {
             Self::PrologAlreadyCalled => "cannot call executor prolog twice",
             Self::EpilogBeforeProlog => "cannot call executor epilog before prolog",
             Self::EpilogAlreadyCalled => "cannot call executor epilog twice",
+            Self::EpilogAfterFailure => "cannot call executor epilog after a callback failure",
         };
         formatter.write_str(message)
     }
@@ -358,6 +495,178 @@ impl ExecutorState {
                 Ok(())
             }
             ExecutorLifecycle::Exited => Err(ExecutorLifecycleError::EpilogAlreadyCalled),
+            ExecutorLifecycle::Failed => Err(ExecutorLifecycleError::EpilogAfterFailure),
         }
+    }
+}
+
+/// The callback surface for the non-portable parts of `src/executor.c`.
+/// Constructor/destructor indices stand in for the null-terminated C arrays;
+/// their bodies and ABI are intentionally not claimed by this crate.
+pub trait ExecutorCallbacks {
+    type Error;
+
+    fn constructor(&mut self, index: usize) -> Result<(), Self::Error>;
+    fn main(&mut self) -> Result<(), Self::Error>;
+    fn destructor(&mut self, index: usize) -> Result<(), Self::Error>;
+    fn unresolved(&mut self) -> Result<(), Self::Error>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutorCallbackPhase {
+    Constructor,
+    Main,
+    Destructor,
+    Unresolved,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ExecutorError<E> {
+    Lifecycle(ExecutorLifecycleError),
+    Callback {
+        phase: ExecutorCallbackPhase,
+        index: Option<usize>,
+        source: E,
+    },
+}
+
+impl<E: fmt::Debug> fmt::Display for ExecutorError<E> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Lifecycle(error) => error.fmt(formatter),
+            Self::Callback { phase, index, .. } => {
+                write!(
+                    formatter,
+                    "executor callback failed at {phase:?} index {index:?}"
+                )
+            }
+        }
+    }
+}
+
+impl<E: fmt::Debug + 'static> Error for ExecutorError<E> {}
+
+/// Deterministic source-order executor seam for `_prolog`, `_epilog`, and
+/// `_unresolved` in `src/executor.c`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Executor {
+    pub state: ExecutorState,
+    pub constructor_count: usize,
+    pub destructor_count: usize,
+    destructor_order: Vec<usize>,
+}
+
+impl Executor {
+    pub fn new(construct_skip: bool, constructor_count: usize, destructor_count: usize) -> Self {
+        Self {
+            state: ExecutorState::new(construct_skip),
+            constructor_count,
+            destructor_count,
+            destructor_order: (0..destructor_count).collect(),
+        }
+    }
+
+    /// Build the executor with the exact order held by the `_dtors` callback
+    /// array. This permits the common reverse-registration array to remain
+    /// explicit while `_epilog` still traverses its array forward.
+    pub fn with_destructor_order(
+        construct_skip: bool,
+        constructor_count: usize,
+        destructor_order: Vec<usize>,
+    ) -> Self {
+        Self {
+            state: ExecutorState::new(construct_skip),
+            constructor_count,
+            destructor_count: destructor_order.len(),
+            destructor_order,
+        }
+    }
+
+    pub fn prolog<C: ExecutorCallbacks>(
+        &mut self,
+        callbacks: &mut C,
+    ) -> Result<(), ExecutorError<C::Error>> {
+        if self.state.lifecycle != ExecutorLifecycle::New {
+            return Err(ExecutorError::Lifecycle(
+                ExecutorLifecycleError::PrologAlreadyCalled,
+            ));
+        }
+        if !self.state.construct_skip {
+            for index in 0..self.constructor_count {
+                if let Err(source) = callbacks.constructor(index) {
+                    self.state.lifecycle = ExecutorLifecycle::Failed;
+                    return Err(ExecutorError::Callback {
+                        phase: ExecutorCallbackPhase::Constructor,
+                        index: Some(index),
+                        source,
+                    });
+                }
+            }
+            self.state.constructors_called = true;
+        }
+        if let Err(source) = callbacks.main() {
+            self.state.lifecycle = ExecutorLifecycle::Failed;
+            return Err(ExecutorError::Callback {
+                phase: ExecutorCallbackPhase::Main,
+                index: None,
+                source,
+            });
+        }
+        self.state.main_called = true;
+        self.state.lifecycle = ExecutorLifecycle::Running;
+        Ok(())
+    }
+
+    pub fn epilog<C: ExecutorCallbacks>(
+        &mut self,
+        callbacks: &mut C,
+    ) -> Result<(), ExecutorError<C::Error>> {
+        match self.state.lifecycle {
+            ExecutorLifecycle::New => {
+                return Err(ExecutorError::Lifecycle(
+                    ExecutorLifecycleError::EpilogBeforeProlog,
+                ))
+            }
+            ExecutorLifecycle::Running => {}
+            ExecutorLifecycle::Exited => {
+                return Err(ExecutorError::Lifecycle(
+                    ExecutorLifecycleError::EpilogAlreadyCalled,
+                ))
+            }
+            ExecutorLifecycle::Failed => {
+                return Err(ExecutorError::Lifecycle(
+                    ExecutorLifecycleError::EpilogAfterFailure,
+                ))
+            }
+        }
+
+        for &index in &self.destructor_order {
+            if let Err(source) = callbacks.destructor(index) {
+                self.state.lifecycle = ExecutorLifecycle::Failed;
+                return Err(ExecutorError::Callback {
+                    phase: ExecutorCallbackPhase::Destructor,
+                    index: Some(index),
+                    source,
+                });
+            }
+        }
+        self.state.destructors_called = true;
+        self.state.lifecycle = ExecutorLifecycle::Exited;
+        Ok(())
+    }
+
+    /// `_unresolved` reports through an explicit callback; OS stack walking
+    /// and terminal output are deliberately outside this Rust production slice.
+    pub fn unresolved<C: ExecutorCallbacks>(
+        &self,
+        callbacks: &mut C,
+    ) -> Result<(), ExecutorError<C::Error>> {
+        callbacks
+            .unresolved()
+            .map_err(|source| ExecutorError::Callback {
+                phase: ExecutorCallbackPhase::Unresolved,
+                index: None,
+                source,
+            })
     }
 }

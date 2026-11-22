@@ -302,7 +302,6 @@ set(PC_SOURCES
     ${PC_ROOT}/src/ui/touch_layout.cpp
     ${PC_ROOT}/src/ui/town_select.cpp
     ${PC_ROOT}/src/ui/ui.cpp
-    ${PC_ROOT}/src/pc_audio.c
     ${PC_ROOT}/src/pc_clock.c
     ${PC_ROOT}/src/pc_gci.c
     ${PC_ROOT}/src/pc_m_card.c
@@ -514,6 +513,47 @@ target_link_libraries(acgc PRIVATE
     aurora::si
     aurora::vi
 )
+
+# The audio ABI is production-wired into acgc. SDL/device calls stay in the
+# narrow pc/src/pc_audio.c host adapter library; AI/DSP state and exported
+# symbols come from the Rust static library. The oracle source is therefore no
+# longer an entry in PC_SOURCES or ACGC_APPLICATION_SOURCES.
+find_program(NOOKERY_AUDIO_CARGO_EXECUTABLE cargo REQUIRED)
+set(NOOKERY_AUDIO_CARGO_TARGET_DIR "${CMAKE_BINARY_DIR}/nookery-audio-cargo")
+set(NOOKERY_AUDIO_RUST_LIBRARY
+    "${NOOKERY_AUDIO_CARGO_TARGET_DIR}/release/libnookery_audio.a")
+file(GLOB_RECURSE NOOKERY_AUDIO_RUST_SOURCES CONFIGURE_DEPENDS
+    "${DECOMP_ROOT}/rust/nookery-audio/src/*.rs"
+)
+add_custom_command(
+    OUTPUT "${NOOKERY_AUDIO_RUST_LIBRARY}"
+    COMMAND ${CMAKE_COMMAND} -E env
+        "CARGO_TARGET_DIR=${NOOKERY_AUDIO_CARGO_TARGET_DIR}"
+        "${NOOKERY_AUDIO_CARGO_EXECUTABLE}" build --release --locked
+        --manifest-path "${DECOMP_ROOT}/rust/Cargo.toml"
+        --package nookery-audio
+    DEPENDS ${NOOKERY_AUDIO_RUST_SOURCES}
+        "${DECOMP_ROOT}/rust/Cargo.toml"
+        "${DECOMP_ROOT}/rust/Cargo.lock"
+        "${PC_ROOT}/src/pc_audio.c"
+        "${PC_ROOT}/include/acgc/nookery_audio.h"
+    COMMENT "Building the production nookery-audio Rust static library"
+    VERBATIM
+)
+add_custom_target(nookery-audio-staticlib DEPENDS "${NOOKERY_AUDIO_RUST_LIBRARY}")
+add_library(nookery_audio_static STATIC IMPORTED GLOBAL)
+set_target_properties(nookery_audio_static PROPERTIES
+    IMPORTED_LOCATION "${NOOKERY_AUDIO_RUST_LIBRARY}"
+)
+add_dependencies(nookery_audio_static nookery-audio-staticlib)
+add_library(nookery_audio_host STATIC "${PC_ROOT}/src/pc_audio.c")
+target_include_directories(nookery_audio_host PRIVATE "${PC_ROOT}/include")
+target_link_libraries(nookery_audio_host PRIVATE aurora::core)
+target_link_libraries(acgc PRIVATE nookery_audio_static nookery_audio_host)
+if (UNIX)
+    find_package(Threads REQUIRED)
+    target_link_libraries(acgc PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+endif ()
 
 if (ENABLE_DATA_FFI_PARITY)
     if (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
