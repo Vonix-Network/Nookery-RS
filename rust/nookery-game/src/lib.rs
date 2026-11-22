@@ -1,5 +1,9 @@
 //! Rust implementation of the nookery game frame and executor semantics.
 
+mod controller;
+
+pub use controller::{ControllerInput, ControllerState, STICK_MAX, STICK_MIN};
+
 use std::error::Error;
 use std::fmt;
 
