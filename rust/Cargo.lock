@@ -56,6 +56,10 @@ name = "nookery-input"
 version = "0.1.0"
 
 [[package]]
+name = "nookery-item-data"
+version = "0.1.0"
+
+[[package]]
 name = "nookery-runtime"
 version = "0.1.0"
 
