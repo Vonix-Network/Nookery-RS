@@ -936,7 +936,7 @@ fn swap_combination(
 }
 
 fn swap_shop(bytes: &mut [u8], offset: usize, direction: SwapDirection) -> Result<(), GciError> {
-    for index in 0..3 {
+    for index in 0..5 {
         repack_2222(&mut bytes[offset + index], direction);
     }
     for index in 0..10 {

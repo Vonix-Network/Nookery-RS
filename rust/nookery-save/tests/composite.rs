@@ -97,6 +97,23 @@ fn full_save_walker_hits_source_anchored_families_and_round_trips() {
     assert_eq!(bytes, original);
 }
 
+#[test]
+fn shop_repack_covers_all_five_kind_bytes_and_preserves_padding() {
+    let mut bytes = vec![0u8; nookery_save::SAVE_SIZE];
+    bytes[0x20340 + 3] = 0x01;
+    bytes[0x20340 + 4] = 0x02;
+    bytes[0x20340 + 5] = 0xA5;
+    let original = bytes.clone();
+
+    swap_save_t_verified(&mut bytes, SwapDirection::FromBigEndian).expect("BE save");
+    assert_eq!(bytes[0x20340 + 3], 0x40);
+    assert_eq!(bytes[0x20340 + 4], 0x80);
+    assert_eq!(bytes[0x20340 + 5], 0xA5);
+
+    swap_save_t_verified(&mut bytes, SwapDirection::ToBigEndian).expect("LE save");
+    assert_eq!(bytes, original);
+}
+
 /// `swap_mHm_lyr` swaps `UT_Z_NUM * UT_X_NUM` (16 * 16) furniture `u16`
 /// slots, i.e. the whole `items[0][0..0x200]` span of `mHm_lyr_c`, not just
 /// the first 64. A slot above index 63 must therefore convert in both
