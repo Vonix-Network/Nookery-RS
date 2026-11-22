@@ -11,7 +11,9 @@
 //! the REL load/unlink, and suppresses COPYDATE's fatal error; those target
 //! decisions are not guessed by this crate.
 
+use std::ffi::{c_char, c_void};
 use std::fmt;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// Ordered boot phases observed in `src/static/boot.c`.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -412,6 +414,523 @@ where
     F: FnOnce(&mut C) -> Result<(), String>,
 {
     operation(callbacks).map_err(|reason| EntryError::Callback { event, reason })
+}
+
+/// Maximum number of constructor/destructor callbacks accepted by the C ABI.
+/// The fixed bound keeps the table layout stable and makes malformed counts
+/// rejectable before any callback is entered.
+pub const NOOKERY_BOOT_MAX_CALLBACKS: usize = 16;
+
+/// Successful callback return value.
+pub const NOOKERY_BOOT_OK: i32 = 0;
+/// Reserved callback result. `construct_skip` itself is the table flag and is
+/// never inferred from a callback result.
+pub const NOOKERY_BOOT_SKIP: i32 = 1;
+/// The callback table or its context is not usable.
+pub const NOOKERY_BOOT_INVALID_ARGUMENT: i32 = -1;
+/// A required callback is absent or a callback count exceeds the fixed bound.
+pub const NOOKERY_BOOT_INVALID_TABLE: i32 = -2;
+/// A callback returned a non-success value.
+pub const NOOKERY_BOOT_CALLBACK_FAILED: i32 = -3;
+/// The operation is not valid in the current repeated-call state.
+pub const NOOKERY_BOOT_INVALID_STATE: i32 = -4;
+/// A callback panicked; panics never cross this ABI.
+pub const NOOKERY_BOOT_PANIC: i32 = -5;
+/// No unresolved callback was registered for an unresolved-function report.
+pub const NOOKERY_BOOT_UNRESOLVED_UNAVAILABLE: i32 = -6;
+/// The report callback failed while reporting an operation failure.
+pub const NOOKERY_BOOT_REPORT_FAILED: i32 = -7;
+/// The source `_unresolved` report is bounded to sixteen frames.
+pub const NOOKERY_BOOT_MAX_UNRESOLVED_FRAMES: usize = 16;
+
+/// A callback invoked by the production C++ adapter.
+pub type NookeryBootCallback = unsafe extern "C-unwind" fn(*mut c_void) -> i32;
+
+/// Reports an ABI failure. The message is a borrowed, NUL-terminated string
+/// valid only for the duration of this call. A null reporter is permitted;
+/// the result code remains the authoritative failure boundary.
+pub type NookeryBootReport = unsafe extern "C-unwind" fn(*mut c_void, i32, *const c_char) -> i32;
+
+/// One bounded stack frame supplied by the host-side `_unresolved` adapter.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct NookeryBootStackFrame {
+    pub address: u32,
+    pub back_chain: u32,
+    pub link_register: u32,
+}
+
+/// Callback for the unresolved-function report boundary. Rust does not walk
+/// a host stack: the C++ adapter supplies at most sixteen already-captured
+/// frames from the platform stack API.
+pub type NookeryBootUnresolvedCallback =
+    unsafe extern "C-unwind" fn(*mut c_void, *const NookeryBootStackFrame, u32) -> i32;
+
+/// Stable C ABI callback table for the boot constructor/main/destructor seam.
+///
+/// `construct_skip` is a data flag matching the C entry decision: when it is
+/// non-zero, constructors are not called, while `main` and epilog cleanup
+/// remain available. Slots are executed in ascending order for constructors
+/// and descending order for destructors.
+#[repr(C)]
+pub struct NookeryBootCallbackTable {
+    pub context: *mut c_void,
+    pub construct_skip: u8,
+    pub constructor_count: u32,
+    pub constructors: [Option<NookeryBootCallback>; NOOKERY_BOOT_MAX_CALLBACKS],
+    pub main: Option<NookeryBootCallback>,
+    pub destructor_count: u32,
+    pub destructors: [Option<NookeryBootCallback>; NOOKERY_BOOT_MAX_CALLBACKS],
+    pub unresolved: Option<NookeryBootUnresolvedCallback>,
+    pub report: Option<NookeryBootReport>,
+    pub entry_pad_init: Option<NookeryBootCallback>,
+    pub entry_debug_mode: Option<NookeryBootCallback>,
+    pub entry_reset_register: Option<NookeryBootCallback>,
+    pub entry_mainproc: Option<NookeryBootCallback>,
+}
+
+impl NookeryBootCallbackTable {
+    /// A table with no callbacks registered. It is useful as a base for a C
+    /// or C++ adapter that fills the fields explicitly.
+    pub const fn empty(context: *mut c_void) -> Self {
+        Self {
+            context,
+            construct_skip: 0,
+            constructor_count: 0,
+            constructors: [None; NOOKERY_BOOT_MAX_CALLBACKS],
+            main: None,
+            destructor_count: 0,
+            destructors: [None; NOOKERY_BOOT_MAX_CALLBACKS],
+            unresolved: None,
+            report: None,
+            entry_pad_init: None,
+            entry_debug_mode: None,
+            entry_reset_register: None,
+            entry_mainproc: None,
+        }
+    }
+}
+
+impl fmt::Debug for NookeryBootCallbackTable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NookeryBootCallbackTable")
+            .field("context", &self.context)
+            .field("construct_skip", &self.construct_skip)
+            .field("constructor_count", &self.constructor_count)
+            .field("main", &self.main.map(|_| "registered"))
+            .field("destructor_count", &self.destructor_count)
+            .field("unresolved", &self.unresolved.map(|_| "registered"))
+            .field("report", &self.report.map(|_| "registered"))
+            .field("entry_pad_init", &self.entry_pad_init.map(|_| "registered"))
+            .field(
+                "entry_debug_mode",
+                &self.entry_debug_mode.map(|_| "registered"),
+            )
+            .field(
+                "entry_reset_register",
+                &self.entry_reset_register.map(|_| "registered"),
+            )
+            .field("entry_mainproc", &self.entry_mainproc.map(|_| "registered"))
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RegisteredBootCallbacks {
+    table: usize,
+    lifecycle: AbiLifecycle,
+    entry_called: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AbiLifecycle {
+    Registered,
+    Running,
+    Exited,
+    Failed,
+}
+
+static REGISTERED_CALLBACKS: std::sync::Mutex<Option<RegisteredBootCallbacks>> =
+    std::sync::Mutex::new(None);
+
+fn report(table: &NookeryBootCallbackTable, code: i32, message: &str) -> i32 {
+    if table.context.is_null() {
+        return NOOKERY_BOOT_INVALID_ARGUMENT;
+    }
+    let Some(reporter) = table.report else {
+        return NOOKERY_BOOT_OK;
+    };
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let mut bytes = message
+            .as_bytes()
+            .iter()
+            .copied()
+            .filter(|byte| *byte != 0)
+            .collect::<Vec<_>>();
+        bytes.push(0);
+        // SAFETY: `reporter` is supplied by the registered C adapter and
+        // receives the same opaque context that was validated at registration.
+        unsafe { reporter(table.context, code, bytes.as_ptr().cast()) }
+    }));
+    match result {
+        Ok(NOOKERY_BOOT_OK) => NOOKERY_BOOT_OK,
+        Ok(_) => NOOKERY_BOOT_REPORT_FAILED,
+        Err(_) => NOOKERY_BOOT_PANIC,
+    }
+}
+
+fn reported_error(table: &NookeryBootCallbackTable, code: i32, message: &str) -> i32 {
+    let report_code = report(table, code, message);
+    if report_code == NOOKERY_BOOT_OK {
+        code
+    } else {
+        report_code
+    }
+}
+
+fn validate_table(table: &NookeryBootCallbackTable) -> Result<(), i32> {
+    if table.context.is_null() {
+        return Err(NOOKERY_BOOT_INVALID_ARGUMENT);
+    }
+    if table.constructor_count as usize > NOOKERY_BOOT_MAX_CALLBACKS
+        || table.destructor_count as usize > NOOKERY_BOOT_MAX_CALLBACKS
+    {
+        return Err(NOOKERY_BOOT_INVALID_TABLE);
+    }
+    if table.main.is_none() {
+        return Err(NOOKERY_BOOT_INVALID_TABLE);
+    }
+    if table
+        .constructors
+        .iter()
+        .take(table.constructor_count as usize)
+        .any(Option::is_none)
+        || table
+            .destructors
+            .iter()
+            .take(table.destructor_count as usize)
+            .any(Option::is_none)
+    {
+        return Err(NOOKERY_BOOT_INVALID_TABLE);
+    }
+    Ok(())
+}
+
+fn invoke(table: &NookeryBootCallbackTable, callback: NookeryBootCallback) -> i32 {
+    match catch_unwind(AssertUnwindSafe(|| unsafe { callback(table.context) })) {
+        Ok(NOOKERY_BOOT_OK) => NOOKERY_BOOT_OK,
+        Ok(
+            code @ (NOOKERY_BOOT_INVALID_ARGUMENT
+            | NOOKERY_BOOT_INVALID_TABLE
+            | NOOKERY_BOOT_INVALID_STATE
+            | NOOKERY_BOOT_CALLBACK_FAILED
+            | NOOKERY_BOOT_UNRESOLVED_UNAVAILABLE),
+        ) => code,
+        Ok(_) => NOOKERY_BOOT_CALLBACK_FAILED,
+        Err(_) => NOOKERY_BOOT_PANIC,
+    }
+}
+
+fn ffi_guard<F>(operation: F) -> i32
+where
+    F: FnOnce() -> i32,
+{
+    catch_unwind(AssertUnwindSafe(operation)).unwrap_or(NOOKERY_BOOT_PANIC)
+}
+
+fn with_registered_table<F>(operation: F) -> i32
+where
+    F: FnOnce(&NookeryBootCallbackTable) -> i32,
+{
+    let registered = match REGISTERED_CALLBACKS.lock() {
+        Ok(guard) => *guard,
+        Err(_) => return NOOKERY_BOOT_INVALID_STATE,
+    };
+    let Some(registered) = registered else {
+        return NOOKERY_BOOT_INVALID_ARGUMENT;
+    };
+    // Registration only stores a pointer owned by the adapter. The adapter
+    // must keep its table alive until it replaces the registration.
+    let Some(table) = (unsafe { (registered.table as *const NookeryBootCallbackTable).as_ref() })
+    else {
+        return NOOKERY_BOOT_INVALID_ARGUMENT;
+    };
+    operation(table)
+}
+
+/// Register the callback table used by the exported prolog/epilog functions.
+/// Registration replaces the prior table and resets repeated-call state.
+///
+/// # Safety
+/// `table` must be null or point to a fully initialized table that remains
+/// alive and unchanged until it is unregistered or replaced. Its context and
+/// callback pointers must remain valid for every exported operation.
+#[no_mangle]
+pub unsafe extern "C" fn nookery_boot_register_callbacks(
+    table: *const NookeryBootCallbackTable,
+) -> i32 {
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let Some(table_ref) = (unsafe { table.as_ref() }) else {
+            return NOOKERY_BOOT_INVALID_ARGUMENT;
+        };
+        if let Err(code) = validate_table(table_ref) {
+            return reported_error(table_ref, code, "invalid nookery boot callback table");
+        }
+        let Ok(mut registered) = REGISTERED_CALLBACKS.lock() else {
+            return NOOKERY_BOOT_INVALID_STATE;
+        };
+        *registered = Some(RegisteredBootCallbacks {
+            table: table as usize,
+            lifecycle: AbiLifecycle::Registered,
+            entry_called: false,
+        });
+        NOOKERY_BOOT_OK
+    }));
+    result.unwrap_or(NOOKERY_BOOT_PANIC)
+}
+
+/// Clear the registered table. This is also the explicit repeated-call reset
+/// point for an adapter that has completed epilog and wants a fresh prolog.
+#[no_mangle]
+pub extern "C" fn nookery_boot_unregister_callbacks() -> i32 {
+    match catch_unwind(AssertUnwindSafe(|| {
+        let Ok(mut registered) = REGISTERED_CALLBACKS.lock() else {
+            return NOOKERY_BOOT_INVALID_STATE;
+        };
+        *registered = None;
+        NOOKERY_BOOT_OK
+    })) {
+        Ok(code) => code,
+        Err(_) => NOOKERY_BOOT_PANIC,
+    }
+}
+
+/// Run constructors in source order, unless `construct_skip` is set, then
+/// invoke the registered main callback exactly once.
+#[no_mangle]
+pub extern "C" fn nookery_boot_prolog() -> i32 {
+    ffi_guard(|| {
+        with_registered_table(|table| {
+            if let Err(code) = validate_table(table) {
+                return reported_error(table, code, "invalid nookery boot callback table");
+            }
+            let state = match REGISTERED_CALLBACKS.lock() {
+                Ok(mut registered) => {
+                    let Some(state) = registered.as_mut() else {
+                        return NOOKERY_BOOT_INVALID_ARGUMENT;
+                    };
+                    if state.lifecycle != AbiLifecycle::Registered {
+                        return NOOKERY_BOOT_INVALID_STATE;
+                    }
+                    state.lifecycle = AbiLifecycle::Running;
+                    state.lifecycle
+                }
+                Err(_) => return NOOKERY_BOOT_INVALID_STATE,
+            };
+            debug_assert_eq!(state, AbiLifecycle::Running);
+            if table.construct_skip == 0 {
+                for callback in table
+                    .constructors
+                    .iter()
+                    .take(table.constructor_count as usize)
+                    .flatten()
+                {
+                    let code = invoke(table, *callback);
+                    if code != NOOKERY_BOOT_OK {
+                        let code = reported_error(table, code, "constructor callback failed");
+                        if let Ok(mut registered) = REGISTERED_CALLBACKS.lock() {
+                            if let Some(state) = registered.as_mut() {
+                                state.lifecycle = AbiLifecycle::Failed;
+                            }
+                        }
+                        return code;
+                    }
+                }
+            }
+            let Some(main) = table.main else {
+                if let Ok(mut registered) = REGISTERED_CALLBACKS.lock() {
+                    if let Some(state) = registered.as_mut() {
+                        state.lifecycle = AbiLifecycle::Failed;
+                    }
+                }
+                return reported_error(table, NOOKERY_BOOT_INVALID_TABLE, "main callback missing");
+            };
+            let code = invoke(table, main);
+            if code != NOOKERY_BOOT_OK {
+                let code = reported_error(table, code, "main callback failed");
+                if let Ok(mut registered) = REGISTERED_CALLBACKS.lock() {
+                    if let Some(state) = registered.as_mut() {
+                        state.lifecycle = AbiLifecycle::Failed;
+                    }
+                }
+                return code;
+            }
+            code
+        })
+    })
+}
+
+/// Run destructors in reverse source order. A failure is reported and stops
+/// the sequence; already-run destructors are not repeated by this call.
+#[no_mangle]
+pub extern "C" fn nookery_boot_epilog() -> i32 {
+    ffi_guard(|| {
+        with_registered_table(|table| {
+            if let Err(code) = validate_table(table) {
+                return reported_error(table, code, "invalid nookery boot callback table");
+            }
+            match REGISTERED_CALLBACKS.lock() {
+                Ok(mut registered) => {
+                    let Some(state) = registered.as_mut() else {
+                        return NOOKERY_BOOT_INVALID_ARGUMENT;
+                    };
+                    if state.lifecycle != AbiLifecycle::Running {
+                        return NOOKERY_BOOT_INVALID_STATE;
+                    }
+                    state.lifecycle = AbiLifecycle::Exited;
+                }
+                Err(_) => return NOOKERY_BOOT_INVALID_STATE,
+            }
+            for callback in table
+                .destructors
+                .iter()
+                .take(table.destructor_count as usize)
+                .rev()
+                .flatten()
+            {
+                let code = invoke(table, *callback);
+                if code != NOOKERY_BOOT_OK {
+                    let code = reported_error(table, code, "destructor callback failed");
+                    if let Ok(mut registered) = REGISTERED_CALLBACKS.lock() {
+                        if let Some(state) = registered.as_mut() {
+                            state.lifecycle = AbiLifecycle::Failed;
+                        }
+                    }
+                    return code;
+                }
+            }
+            NOOKERY_BOOT_OK
+        })
+    })
+}
+
+/// Invoke the `src/main.c` `entry` sequence after `_prolog` has completed:
+/// `padmgr_Init(NULL)`, `new_Debug_mode()`, `SETREG(SREG, 0, 0)`, then
+/// `mainproc(NULL)`.
+#[no_mangle]
+pub extern "C" fn nookery_boot_entry() -> i32 {
+    ffi_guard(|| {
+        with_registered_table(|table| {
+            if let Err(code) = validate_table(table) {
+                return reported_error(table, code, "invalid nookery boot callback table");
+            }
+            let (pad_init, debug_mode, reset_register, mainproc) = match (
+                table.entry_pad_init,
+                table.entry_debug_mode,
+                table.entry_reset_register,
+                table.entry_mainproc,
+            ) {
+                (Some(pad_init), Some(debug_mode), Some(reset_register), Some(mainproc)) => {
+                    (pad_init, debug_mode, reset_register, mainproc)
+                }
+                _ => {
+                    return reported_error(
+                        table,
+                        NOOKERY_BOOT_INVALID_TABLE,
+                        "entry callback missing",
+                    )
+                }
+            };
+            match REGISTERED_CALLBACKS.lock() {
+                Ok(mut registered) => {
+                    let Some(state) = registered.as_mut() else {
+                        return NOOKERY_BOOT_INVALID_ARGUMENT;
+                    };
+                    if state.lifecycle != AbiLifecycle::Running || state.entry_called {
+                        return NOOKERY_BOOT_INVALID_STATE;
+                    }
+                    state.entry_called = true;
+                }
+                Err(_) => return NOOKERY_BOOT_INVALID_STATE,
+            }
+            for (callback, message) in [
+                (pad_init, "entry pad-init callback failed"),
+                (debug_mode, "entry debug-mode callback failed"),
+                (reset_register, "entry reset-register callback failed"),
+                (mainproc, "entry mainproc callback failed"),
+            ] {
+                let code = invoke(table, callback);
+                if code != NOOKERY_BOOT_OK {
+                    let code = reported_error(table, code, message);
+                    if let Ok(mut registered) = REGISTERED_CALLBACKS.lock() {
+                        if let Some(state) = registered.as_mut() {
+                            state.lifecycle = AbiLifecycle::Failed;
+                        }
+                    }
+                    return code;
+                }
+            }
+            NOOKERY_BOOT_OK
+        })
+    })
+}
+
+/// Deliver a bounded `_unresolved` report. Stack walking remains a host
+/// responsibility; a missing unresolved callback is an explicit error rather
+/// than silently pretending the diagnostic was handled.
+///
+/// # Safety
+/// `frames` must be null when `frame_count` is zero, otherwise it must point
+/// to `frame_count` readable frames that remain valid for this call.
+#[no_mangle]
+pub unsafe extern "C" fn nookery_boot_unresolved(
+    frames: *const NookeryBootStackFrame,
+    frame_count: u32,
+) -> i32 {
+    ffi_guard(|| {
+        with_registered_table(|table| {
+            if frame_count as usize > NOOKERY_BOOT_MAX_UNRESOLVED_FRAMES {
+                return reported_error(
+                    table,
+                    NOOKERY_BOOT_INVALID_ARGUMENT,
+                    "too many unresolved frames",
+                );
+            }
+            if frame_count != 0 && frames.is_null() {
+                return reported_error(
+                    table,
+                    NOOKERY_BOOT_INVALID_ARGUMENT,
+                    "null unresolved frames",
+                );
+            }
+            let Some(unresolved) = table.unresolved else {
+                return reported_error(
+                    table,
+                    NOOKERY_BOOT_UNRESOLVED_UNAVAILABLE,
+                    "unresolved callback unavailable",
+                );
+            };
+            let code = match catch_unwind(AssertUnwindSafe(|| unsafe {
+                unresolved(table.context, frames, frame_count)
+            })) {
+                Ok(NOOKERY_BOOT_OK) => NOOKERY_BOOT_OK,
+                Ok(
+                    code @ (NOOKERY_BOOT_INVALID_ARGUMENT
+                    | NOOKERY_BOOT_INVALID_TABLE
+                    | NOOKERY_BOOT_INVALID_STATE
+                    | NOOKERY_BOOT_CALLBACK_FAILED
+                    | NOOKERY_BOOT_UNRESOLVED_UNAVAILABLE),
+                ) => code,
+                Ok(_) => NOOKERY_BOOT_CALLBACK_FAILED,
+                Err(_) => NOOKERY_BOOT_PANIC,
+            };
+            if code == NOOKERY_BOOT_OK {
+                code
+            } else {
+                reported_error(table, code, "unresolved callback failed")
+            }
+        })
+    })
 }
 
 // These hooks intentionally do not provide platform defaults. The real C
