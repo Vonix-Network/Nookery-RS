@@ -19,6 +19,10 @@ name = "nookery-actor"
 version = "0.1.0"
 
 [[package]]
+name = "nookery-actor-npc"
+version = "0.1.0"
+
+[[package]]
 name = "nookery-arena"
 version = "0.1.0"
 
