@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["nookery-core", "nookery-save", "nookery-input", "nookery-config", "nookery-famicom", "nookery-bswap", "nookery-arena", "nookery-disc", "nookery-texture", "nookery-data-ffi", "nookery-data-assets", "nookery-social-proto", "nookery-social-model", "nookery-runtime", "nookery-game", "nookery-graph", "nookery-audio", "nookery-boot", "nookery-effects", "nookery-actor", "nookery-social-persistence", "nookery-social-server", "nookery-libc64"]
+members = ["nookery-core", "nookery-save", "nookery-input", "nookery-config", "nookery-famicom", "nookery-bswap", "nookery-arena", "nookery-disc", "nookery-texture", "nookery-item-data", "nookery-data-ffi", "nookery-data-assets", "nookery-social-proto", "nookery-social-model", "nookery-runtime", "nookery-game", "nookery-graph", "nookery-audio", "nookery-boot", "nookery-effects", "nookery-actor", "nookery-social-persistence", "nookery-social-server", "nookery-libc64"]
 
 [workspace.package]
 edition = "2024"

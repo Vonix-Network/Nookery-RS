@@ -84,6 +84,10 @@ name = "nookery-input"
 version = "0.1.0"
 
 [[package]]
+name = "nookery-item-data"
+version = "0.1.0"
+
+[[package]]
 name = "nookery-libc64"
 version = "0.1.0"
 
