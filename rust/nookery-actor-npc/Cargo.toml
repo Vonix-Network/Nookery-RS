@@ -1,0 +1,9 @@
+[package]
+name = "nookery-actor-npc"
+version = "0.1.0"
+description = "Rust model of the Nookery normal-NPC request and lifecycle dispatch"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
