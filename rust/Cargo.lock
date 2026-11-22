@@ -15,6 +15,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "nookery-actor"
+version = "0.1.0"
+
+[[package]]
 name = "nookery-arena"
 version = "0.1.0"
 
@@ -39,6 +43,10 @@ dependencies = [
 
 [[package]]
 name = "nookery-core"
+version = "0.1.0"
+
+[[package]]
+name = "nookery-data-assets"
 version = "0.1.0"
 
 [[package]]
@@ -73,6 +81,10 @@ version = "0.1.0"
 
 [[package]]
 name = "nookery-input"
+version = "0.1.0"
+
+[[package]]
+name = "nookery-libc64"
 version = "0.1.0"
 
 [[package]]

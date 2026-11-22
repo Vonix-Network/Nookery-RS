@@ -3189,7 +3189,8 @@ mod tests {
 
     #[test]
     fn expired_visitor_removal_is_replayed_after_snapshot_torn() {
-        let (mut town_server, root) = server(Duration::from_millis(100));
+        let lease = Duration::from_secs(1);
+        let (mut town_server, root) = server(lease);
         let owner = model::SessionId::new(10);
         let visitor = model::SessionId::new(11);
         let town = TownKey::new([0x55; 16]);
@@ -3214,7 +3215,7 @@ mod tests {
             )
             .unwrap();
 
-        std::thread::sleep(Duration::from_millis(120));
+        std::thread::sleep(lease + Duration::from_millis(100));
         town_server
             .reconnect(owner, model::ActorId::new(1))
             .unwrap();

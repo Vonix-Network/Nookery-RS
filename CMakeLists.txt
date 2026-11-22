@@ -516,12 +516,19 @@ target_link_libraries(acgc PRIVATE
 
 # The audio ABI is production-wired into acgc. SDL/device calls stay in the
 # narrow pc/src/pc_audio.c host adapter library; AI/DSP state and exported
-# symbols come from the Rust static library. The oracle source is therefore no
-# longer an entry in PC_SOURCES or ACGC_APPLICATION_SOURCES.
+# symbols come from a Rust shared image. The static archive remains available
+# from Cargo for Rust-side tests but is not part of the production link.
 find_program(NOOKERY_AUDIO_CARGO_EXECUTABLE cargo REQUIRED)
 set(NOOKERY_AUDIO_CARGO_TARGET_DIR "${CMAKE_BINARY_DIR}/nookery-audio-cargo")
+if (WIN32)
+    set(NOOKERY_AUDIO_RUST_LIBRARY_NAME "nookery_audio.dll")
+elseif (APPLE)
+    set(NOOKERY_AUDIO_RUST_LIBRARY_NAME "libnookery_audio.dylib")
+else ()
+    set(NOOKERY_AUDIO_RUST_LIBRARY_NAME "libnookery_audio.so")
+endif ()
 set(NOOKERY_AUDIO_RUST_LIBRARY
-    "${NOOKERY_AUDIO_CARGO_TARGET_DIR}/release/libnookery_audio.a")
+    "${NOOKERY_AUDIO_CARGO_TARGET_DIR}/release/${NOOKERY_AUDIO_RUST_LIBRARY_NAME}")
 file(GLOB_RECURSE NOOKERY_AUDIO_RUST_SOURCES CONFIGURE_DEPENDS
     "${DECOMP_ROOT}/rust/nookery-audio/src/*.rs"
 )
@@ -537,23 +544,51 @@ add_custom_command(
         "${DECOMP_ROOT}/rust/Cargo.lock"
         "${PC_ROOT}/src/pc_audio.c"
         "${PC_ROOT}/include/acgc/nookery_audio.h"
-    COMMENT "Building the production nookery-audio Rust static library"
+    COMMENT "Building the production nookery-audio Rust shared library"
     VERBATIM
 )
-add_custom_target(nookery-audio-staticlib DEPENDS "${NOOKERY_AUDIO_RUST_LIBRARY}")
-add_library(nookery_audio_static STATIC IMPORTED GLOBAL)
-set_target_properties(nookery_audio_static PROPERTIES
+add_custom_target(nookery-audio-sharedlib DEPENDS "${NOOKERY_AUDIO_RUST_LIBRARY}")
+add_library(nookery_audio_shared SHARED IMPORTED GLOBAL)
+set_target_properties(nookery_audio_shared PROPERTIES
     IMPORTED_LOCATION "${NOOKERY_AUDIO_RUST_LIBRARY}"
+    IMPORTED_NO_SONAME TRUE
 )
-add_dependencies(nookery_audio_static nookery-audio-staticlib)
+if (WIN32)
+    set_target_properties(nookery_audio_shared PROPERTIES
+        IMPORTED_IMPLIB "${NOOKERY_AUDIO_RUST_LIBRARY}.lib"
+    )
+endif ()
+add_dependencies(nookery_audio_shared nookery-audio-sharedlib)
 add_library(nookery_audio_host STATIC "${PC_ROOT}/src/pc_audio.c")
 target_include_directories(nookery_audio_host PRIVATE "${PC_ROOT}/include")
 target_link_libraries(nookery_audio_host PRIVATE aurora::core)
-target_link_libraries(acgc PRIVATE nookery_audio_static nookery_audio_host)
+target_link_libraries(acgc PRIVATE nookery_audio_shared nookery_audio_host)
 if (UNIX)
     find_package(Threads REQUIRED)
     target_link_libraries(acgc PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
 endif ()
+
+# Keep the production executable on the exact Cargo image it was linked
+# against. This is the same relative lookup boundary used by nookery-runtime.
+if (APPLE)
+    set(NOOKERY_AUDIO_RELATIVE_RPATH "@loader_path")
+elseif (UNIX)
+    set(NOOKERY_AUDIO_RELATIVE_RPATH "\$ORIGIN")
+endif ()
+add_custom_command(TARGET acgc POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${NOOKERY_AUDIO_RUST_LIBRARY}"
+        "$<TARGET_FILE_DIR:acgc>"
+    COMMENT "Copying the exact nookery-audio image beside acgc"
+    VERBATIM
+)
+if (NOOKERY_AUDIO_RELATIVE_RPATH)
+    set_property(TARGET acgc APPEND PROPERTY
+        BUILD_RPATH "${NOOKERY_AUDIO_RELATIVE_RPATH}")
+    set_property(TARGET acgc APPEND PROPERTY
+        INSTALL_RPATH "${NOOKERY_AUDIO_RELATIVE_RPATH}")
+endif ()
+install(FILES "${NOOKERY_AUDIO_RUST_LIBRARY}" DESTINATION ${CMAKE_INSTALL_PREFIX})
 
 if (ENABLE_DATA_FFI_PARITY)
     if (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
@@ -616,13 +651,11 @@ if (ENABLE_DATA_FFI_PARITY)
     )
 endif ()
 
-if (ENABLE_NOOKERY_RUNTIME_SMOKE)
-    find_program(NOOKERY_RUNTIME_CARGO_EXECUTABLE cargo)
-    if (NOT NOOKERY_RUNTIME_CARGO_EXECUTABLE)
-        message(FATAL_ERROR
-            "ENABLE_NOOKERY_RUNTIME_SMOKE requires cargo; install Rust or configure with -DENABLE_NOOKERY_RUNTIME_SMOKE=OFF")
-    endif ()
-
+find_program(NOOKERY_RUNTIME_CARGO_EXECUTABLE cargo)
+if (NOT NOOKERY_RUNTIME_CARGO_EXECUTABLE)
+    message(FATAL_ERROR
+        "The production acgc route requires cargo to build nookery-runtime")
+endif ()
     # An empty target deliberately means Cargo's host target.  Cross builds
     # must set this cache entry to the Rust target triple matching the CMake
     # toolchain; this avoids silently linking a host archive into a target app.
@@ -658,7 +691,7 @@ if (ENABLE_NOOKERY_RUNTIME_SMOKE)
         DEPENDS ${NOOKERY_RUNTIME_RUST_SOURCES}
             "${DECOMP_ROOT}/rust/Cargo.toml"
             "${DECOMP_ROOT}/rust/Cargo.lock"
-        COMMENT "Building the opt-in nookery-runtime release shared library"
+        COMMENT "Building the production nookery-runtime release shared library"
         VERBATIM
     )
     add_custom_target(nookery-runtime-sharedlib DEPENDS "${NOOKERY_RUNTIME_RUST_LIBRARY}")
@@ -678,8 +711,13 @@ if (ENABLE_NOOKERY_RUNTIME_SMOKE)
 
     add_library(nookery_runtime_adapter STATIC
         "${PC_ROOT}/src/nookery_runtime_adapter.cpp"
+        "${PC_ROOT}/src/nookery_runtime_smoke_adapter.cpp"
     )
-    target_include_directories(nookery_runtime_adapter PUBLIC "${PC_ROOT}/include")
+    target_include_directories(nookery_runtime_adapter PUBLIC
+        "${PC_ROOT}/include"
+        "${DECOMP_ROOT}/extern/aurora/include"
+        "${DECOMP_ROOT}/libs/dolphin/include"
+    )
     add_dependencies(nookery_runtime_adapter nookery-runtime-sharedlib)
     target_link_libraries(nookery_runtime_adapter PRIVATE nookery_runtime_shared)
 
@@ -708,13 +746,21 @@ if (ENABLE_NOOKERY_RUNTIME_SMOKE)
         endif ()
     endforeach ()
 
-    # Link the adapter into the existing PC host only when this diagnostic
-    # option is explicitly enabled; boot_main and the live C path remain the
-    # application's production entry path.
-    target_compile_definitions(acgc PRIVATE ACGC_ENABLE_NOOKERY_RUNTIME_SMOKE=1)
+    # The Rust runtime and its host adapter are the default PC production
+    # route. The callback smoke below remains separately opt-in.
     target_link_libraries(acgc PRIVATE nookery_runtime_adapter nookery_runtime_shared)
     target_include_directories(acgc PRIVATE "${PC_ROOT}/include")
 
+    add_custom_target(nookery-runtime-route-assertion
+        COMMAND ${CMAKE_COMMAND}
+            "-DNOOKERY_RUNTIME_HOST_SOURCE=${PC_ROOT}/src/aurora_main.cpp"
+            -P "${DECOMP_ROOT}/tools/nookery-runtime-smoke/assert_no_legacy_route.cmake"
+        VERBATIM
+        COMMENT "Checking that the production host does not call the legacy C entry route"
+    )
+    add_dependencies(acgc nookery-runtime-route-assertion)
+
+    if (ENABLE_NOOKERY_RUNTIME_SMOKE)
     add_executable(nookery-runtime-smoke
         "${DECOMP_ROOT}/tools/nookery-runtime-smoke/main.cpp"
     )
@@ -748,8 +794,8 @@ if (ENABLE_NOOKERY_RUNTIME_SMOKE)
         USES_TERMINAL
         COMMENT "Running the C++/Rust nookery-runtime callback smoke"
     )
+    endif ()
     install(FILES "${NOOKERY_RUNTIME_RUST_LIBRARY}" DESTINATION ${CMAKE_INSTALL_PREFIX})
-endif ()
 
 set_target_properties(acgc PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

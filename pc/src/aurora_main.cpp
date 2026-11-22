@@ -1,3 +1,6 @@
+#define main acgc_legacy_main
+#include "main.h"
+#undef main
 #include <aurora/aurora.h>
 #include <aurora/dvd.h>
 #include <aurora/event.h>
@@ -18,9 +21,7 @@
 #include "acgc/app_info.hpp"
 #include "acgc/controller_ports.hpp"
 #include "acgc/input_profiles.hpp"
-#if defined(ACGC_ENABLE_NOOKERY_RUNTIME_SMOKE)
 #include "acgc/nookery_runtime_adapter.h"
-#endif
 #include "acgc/data.hpp"
 #include "acgc/disc.hpp"
 #include "acgc/legacy_input.hpp"
@@ -63,8 +64,6 @@ void apply_frame_limit();
 } // namespace
 
 extern "C" {
-void ac_entry();
-int boot_main(int argc, const char** argv);
 void pc_audio_shutdown();
 void pc_audio_mq_shutdown();
 void pc_emu64_tlut_frame_drained();
@@ -692,8 +691,34 @@ int main(int argc, char* argv[]) {
     acgc::input::game_pointer().initialize();
     acgc::input::update_pointer_viewport();
     acgc::texture_replacements::reload();
-    ac_entry();
-    const int result = boot_main(argc, const_cast<const char**>(argv));
+    NookeryRuntimeHandle* runtime = nullptr;
+    int result = acgc_nookery_runtime_start(
+        SCREEN_WIDTH, SCREEN_HEIGHT, 1, &runtime);
+    if (result == NOOKERY_RUNTIME_STATUS_OK) {
+        auto previous = std::chrono::steady_clock::now();
+        while (g_pc_running) {
+            const auto now = std::chrono::steady_clock::now();
+            double delta_seconds = std::chrono::duration<double>(now - previous).count();
+            previous = now;
+            if (delta_seconds <= 0.0) {
+                delta_seconds = 1.0 / 60.0;
+            }
+            if (g_pc_speedhack_enabled) {
+                delta_seconds *= PC_SPEEDHACK_MULTIPLIER;
+            }
+            result = acgc_nookery_runtime_frame(runtime, delta_seconds);
+            if (result != NOOKERY_RUNTIME_STATUS_OK) {
+                MainLog.error("Rust runtime frame failed with status {}", result);
+                break;
+            }
+        }
+        const int shutdown_result = acgc_nookery_runtime_stop(runtime);
+        if (result == NOOKERY_RUNTIME_STATUS_OK && shutdown_result != NOOKERY_RUNTIME_STATUS_OK) {
+            result = shutdown_result;
+        }
+    } else {
+        MainLog.error("Rust runtime boot failed with status {}", result);
+    }
 
     pc_audio_shutdown();
     pc_audio_mq_shutdown();

@@ -1,0 +1,11 @@
+[package]
+name = "nookery-data-assets"
+version = "0.1.0"
+description = "Pure-Rust title-demo data assets generated from the checked-in source"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+crate-type = ["rlib", "staticlib"]

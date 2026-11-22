@@ -28,3 +28,5 @@ DLFTBL_GAME game_dlftbls[] = {
   DLFTBL_MAKE(famicom_emu, FAMICOM_EMU),
   DLFTBL_MAKE(prenmi, PRENMI),
 };
+
+unsigned int game_dlftbls_num = ARRAY_COUNT(game_dlftbls);

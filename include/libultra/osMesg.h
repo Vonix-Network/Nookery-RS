@@ -19,8 +19,16 @@ typedef struct OSMesgQueue_s {
     /* 0x14 */ OSMesg* msg;
 } OSMesgQueue; // size = 0x18
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern void osCreateMesgQueue(OSMessageQueue* mq, OSMessage msg, int flags);
 extern int osSendMesg(OSMessageQueue* mq, OSMessage msg, int flags);
 extern int osRecvMesg(OSMessageQueue* mq, OSMessage* msg, int flags);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

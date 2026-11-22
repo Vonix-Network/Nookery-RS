@@ -96,10 +96,6 @@ NookeryRuntimeStatus nookery_runtime_create(
 NookeryRuntimeStatus nookery_runtime_boot(NookeryRuntimeHandle* handle);
 NookeryRuntimeStatus nookery_runtime_frame(
     NookeryRuntimeHandle* handle, double delta_seconds);
-NookeryRuntimeStatus nookery_runtime_reset(NookeryRuntimeHandle* handle);
-NookeryRuntimeStatus nookery_runtime_prenmi(NookeryRuntimeHandle* handle);
-NookeryRuntimeStatus nookery_runtime_resize(
-    NookeryRuntimeHandle* handle, int64_t requested_size, size_t* actual_size);
 NookeryRuntimeStatus nookery_runtime_shutdown(NookeryRuntimeHandle* handle);
 NookeryRuntimeStatus nookery_runtime_destroy(NookeryRuntimeHandle* handle);
 
