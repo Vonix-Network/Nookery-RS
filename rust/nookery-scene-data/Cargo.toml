@@ -1,0 +1,10 @@
+[workspace]
+
+[package]
+name = "nookery-scene-data"
+edition = "2024"
+license = "MIT"
+version = "0.1.0"
+
+[lib]
+path = "src/lib.rs"
