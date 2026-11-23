@@ -8,9 +8,11 @@
 #![deny(missing_docs)]
 
 pub mod math64;
+pub mod qrand;
 pub mod sleep;
 
 pub use math64::{facos, fatan2, fsqrt, libc64_fsqrt};
+pub use qrand::QRand;
 pub use sleep::{
     OsAlarm, OsAlarmHandler, OsMessageQueue, OsThreadQueue, OsTime, OsTimer, SleepOperation,
     c_sleep_operations, csleep, msleep, os_milliseconds_to_ticks, os_timer_clock, sleep_ticks,
