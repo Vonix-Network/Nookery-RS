@@ -7,6 +7,9 @@
 extern "C" {
 #endif
 
+/* Production PC entry for the Rust-owned graph loop. */
+int acgc_nookery_runtime_graph_proc(void* arg);
+
 /* The production PC host owns this opaque runtime through these helpers. */
 int acgc_nookery_runtime_start(
     uint32_t width, uint32_t height, uint8_t audio_enabled,

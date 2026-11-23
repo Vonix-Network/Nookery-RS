@@ -66,7 +66,7 @@ fn invalid_and_non_positive_inputs_are_typed_errors() {
 }
 
 #[test]
-fn executor_skips_constructors_but_runs_main_and_reverse_destructors() {
+fn executor_skips_constructors_but_runs_main_and_registration_order_destructors() {
     let events = Rc::new(RefCell::new(Vec::new()));
     let main_events = Rc::clone(&events);
     let construct_a_events = Rc::clone(&events);
@@ -81,7 +81,7 @@ fn executor_skips_constructors_but_runs_main_and_reverse_destructors() {
         .run(true);
     assert_eq!(
         events.borrow().as_slice(),
-        ["main", "destruct-b", "destruct-a"]
+        ["main", "destruct-a", "destruct-b"]
     );
 }
 
@@ -105,8 +105,8 @@ fn executor_runs_constructors_in_registration_order() {
             "construct-a",
             "construct-b",
             "main",
-            "destruct-b",
-            "destruct-a"
+            "destruct-a",
+            "destruct-b"
         ]
     );
 }
@@ -124,5 +124,5 @@ fn mutation_checks_fail_for_changed_cap_and_destructor_order() {
         .destructor(move || first_events.borrow_mut().push("first"))
         .destructor(move || second_events.borrow_mut().push("second"))
         .run(false);
-    assert_eq!(events.borrow().as_slice(), ["main", "second", "first"]);
+    assert_eq!(events.borrow().as_slice(), ["main", "first", "second"]);
 }

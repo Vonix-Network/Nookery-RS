@@ -1,5 +1,5 @@
 /*
- * Narrow C ABI for the opt-in nookery-runtime host seam.
+ * Narrow C ABI for the production nookery-runtime host seam.
  *
  * This header intentionally contains only fixed-width C values, function
  * pointers, and an opaque handle.  It exposes no Rust references, slices,
@@ -96,6 +96,10 @@ NookeryRuntimeStatus nookery_runtime_create(
 NookeryRuntimeStatus nookery_runtime_boot(NookeryRuntimeHandle* handle);
 NookeryRuntimeStatus nookery_runtime_frame(
     NookeryRuntimeHandle* handle, double delta_seconds);
+NookeryRuntimeStatus nookery_runtime_reset(NookeryRuntimeHandle* handle);
+NookeryRuntimeStatus nookery_runtime_prenmi(NookeryRuntimeHandle* handle);
+NookeryRuntimeStatus nookery_runtime_resize(
+    NookeryRuntimeHandle* handle, int64_t requested_size, size_t* actual_size);
 NookeryRuntimeStatus nookery_runtime_shutdown(NookeryRuntimeHandle* handle);
 NookeryRuntimeStatus nookery_runtime_destroy(NookeryRuntimeHandle* handle);
 

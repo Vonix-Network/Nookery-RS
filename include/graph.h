@@ -98,6 +98,13 @@ typedef struct graph_s {
 extern void graph_proc(void* arg);
 extern void graph_ct(GRAPH* graph);
 extern void graph_dt(GRAPH* graph);
+/* Production Rust-runtime route seams. These retain the source implementation
+ * and expose only the graph-owned phases that the Rust ABI orders. */
+extern void graph_setup_double_buffer(GRAPH* graph);
+extern int graph_draw_finish(GRAPH* graph);
+extern void graph_task_set00(GRAPH* graph);
+struct game_s;
+extern void* graph_get_next_game_dlftbl(struct game_s* game);
 
 /* 60Hz dt helpers for spawn cooldowns whose inner code uses frame-exact
  * patterns (counter & N, decrement-by-1). Caller supplies a per-site

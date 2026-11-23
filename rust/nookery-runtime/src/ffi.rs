@@ -1,9 +1,8 @@
 //! Stable, no-unwind host boundary for the parent application.
 //!
-//! This is intentionally a seam, not a claim that CMake is wired: the parent
-//! still has to allocate a callback table and call these exports from the
-//! platform/application path. Each operation names its source seam in the
-//! adjacent comment and is kept instance-owned rather than process-global.
+//! The production PC graph entry allocates the callback table and calls these
+//! exports. Each operation names its source seam in the adjacent comment and
+//! is kept instance-owned rather than process-global.
 //!
 //! The C source performs reset detection at the end of a graph frame and then
 //! immediately schedules the PRENMI game transition. This boundary exposes
@@ -186,6 +185,7 @@ struct CAbiRuntime {
     callbacks: NookeryRuntimeCallbacks,
     config: NookeryRuntimeConfig,
     lifecycle: Lifecycle,
+    graph: nookery_graph::Graph,
     frame_index: u64,
     total_60fps_frames: f64,
     audio_accumulator: f64,
@@ -206,6 +206,7 @@ impl CAbiRuntime {
             callbacks,
             config,
             lifecycle: Lifecycle::Cold,
+            graph: nookery_graph::Graph::default(),
             frame_index: 0,
             total_60fps_frames: 0.0,
             audio_accumulator: 0.0,
@@ -290,6 +291,10 @@ impl CAbiRuntime {
             return Err(NookeryRuntimeStatus::InvalidState);
         }
         self.lifecycle = Lifecycle::Booting;
+        if self.graph.begin().is_err() {
+            self.lifecycle = Lifecycle::Failed;
+            return Err(NookeryRuntimeStatus::InvalidState);
+        }
         let result = self.boot_inner();
         if result.is_err() {
             self.lifecycle = Lifecycle::Failed;
@@ -344,10 +349,19 @@ impl CAbiRuntime {
         }
         let effective_delta_seconds = (delta_seconds * 60.0).min(4.0) / 60.0;
         self.lifecycle = Lifecycle::Frame;
+        if self.graph.proc(effective_delta_seconds).is_err() {
+            self.lifecycle = Lifecycle::Failed;
+            return Err(NookeryRuntimeStatus::InvalidState);
+        }
         let result = self.frame_inner(effective_delta_seconds);
         if result.is_err() {
+            let _ = self.graph.finish_frame(false);
             self.lifecycle = Lifecycle::Failed;
         } else {
+            if self.graph.finish_frame(true).is_err() {
+                self.lifecycle = Lifecycle::Failed;
+                return Err(NookeryRuntimeStatus::InvalidState);
+            }
             self.lifecycle = Lifecycle::Booted;
         }
         result
@@ -468,6 +482,10 @@ impl CAbiRuntime {
                 self.lifecycle = Lifecycle::Failed;
                 return Err(status);
             }
+        }
+        if self.graph.end().is_err() {
+            self.lifecycle = Lifecycle::Failed;
+            return Err(NookeryRuntimeStatus::InvalidState);
         }
         self.lifecycle = Lifecycle::Shutdown;
         Ok(())

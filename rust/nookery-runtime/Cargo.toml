@@ -13,3 +13,4 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 nookery-game = { path = "../nookery-game" }
+nookery-graph = { path = "../nookery-graph" }

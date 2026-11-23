@@ -166,7 +166,9 @@ impl<'a> ExecutorPlan<'a> {
             }
         }
         (self.main)();
-        for destructor in self.destructors.iter_mut().rev() {
+        // src/executor.c walks `_dtors` from the first entry to the sentinel;
+        // teardown is registration-order, not stack-order.
+        for destructor in &mut self.destructors {
             destructor();
         }
     }

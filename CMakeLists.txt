@@ -682,6 +682,8 @@ endif ()
     endif ()
     file(GLOB_RECURSE NOOKERY_RUNTIME_RUST_SOURCES CONFIGURE_DEPENDS
         "${DECOMP_ROOT}/rust/nookery-runtime/src/*.rs"
+        "${DECOMP_ROOT}/rust/nookery-game/src/*.rs"
+        "${DECOMP_ROOT}/rust/nookery-graph/src/*.rs"
     )
     add_custom_command(
         OUTPUT "${NOOKERY_RUNTIME_RUST_LIBRARY}"

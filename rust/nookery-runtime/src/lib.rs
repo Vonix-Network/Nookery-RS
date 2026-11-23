@@ -1,10 +1,10 @@
 //! Deterministic application-runtime boundary for the Nookery game.
 //!
-//! The crate models the lifecycle contracts in src/main.c, src/graph.c,
-//! src/game.c, and src/executor.c without owning a renderer, audio device,
-//! platform, game data, or process-global state. The parent application must
-//! still wire this crate into the real CMake/application path before it can
-//! replace the C main/graph/game path.
+//! The crate owns the ordered lifecycle contracts in src/main.c, src/graph.c,
+//! src/game.c, and src/executor.c at the Rust ABI boundary. Renderer, audio,
+//! platform, game data, and process-global state remain explicit host callback
+//! responsibilities; the PC graph entry drives those callbacks through this
+//! crate.
 
 mod adapters;
 mod error;
@@ -344,8 +344,8 @@ mod tests {
                 "constructor-a",
                 "constructor-b",
                 "main",
-                "destructor-b",
-                "destructor-a"
+                "destructor-a",
+                "destructor-b"
             ]
         );
     }
