@@ -16,7 +16,13 @@
 #include "libultra/initialize.h"
 #include "dolphin/os.h"
 #include "dolphin/os/OSAlarm.h"
+// `include/main.h` declares the console entry point as `void main(void)` and
+// the game's `main` symbol is renamed by CMake (`main=ac_entry`), so the plain
+// C++ declaration is not a valid host entry point here.  Rename it out of the
+// way exactly as `pc/src/aurora_main.cpp` does before including the header.
+#define main acgc_legacy_main
 #include "main.h"
+#undef main
 #include "jsyswrap.h"
 #include "libjsys/jsyswrapper.h"
 #include "m_debug.h"
@@ -143,7 +149,7 @@ NookeryRuntimeCallbackStatus dump_aram_heap(void*) {
     return callback_ok();
 }
 
-void graph_setup_double_buffer(RuntimeHost* host) {
+void apply_double_buffer_setup(RuntimeHost* host) {
     std::memset(&sys_dynamic, 0, sizeof(sys_dynamic));
     sys_dynamic.start_magic = SYSDYNAMIC_START_MAGIC;
     sys_dynamic.end_magic = SYSDYNAMIC_END_MAGIC;
@@ -218,7 +224,7 @@ NookeryRuntimeCallbackStatus frame_begin(void* user_data) {
     if (!advance_game(host)) {
         return callback_failed();
     }
-    graph_setup_double_buffer(host);
+    apply_double_buffer_setup(host);
     game_get_controller(host->game);
     return callback_ok();
 }
