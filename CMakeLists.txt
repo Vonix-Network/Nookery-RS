@@ -486,8 +486,16 @@ endif ()
 if (WIN32)
     if (MSVC)
         target_link_options(acgc PRIVATE /MANIFEST:NO)
+        set_target_properties(acgc PROPERTIES WIN32_EXECUTABLE TRUE)
+    else ()
+        # MinGW-w64 with -mwindows (-WIN32_EXECUTABLE) expects WinMain, but the
+        # host defines a plain main(). Linking `-mwindows` against mingw32's
+        # main shim supplies WinMain and calls main(), which is the standard
+        # MinGW idiom for a GUI program with a console-style entry point.
+        set_target_properties(acgc PROPERTIES WIN32_EXECUTABLE TRUE)
+        target_link_options(acgc PRIVATE -mwindows)
+        target_link_libraries(acgc PRIVATE mingw32)
     endif ()
-    set_target_properties(acgc PROPERTIES WIN32_EXECUTABLE TRUE)
 endif ()
 
 target_link_libraries(acgc PRIVATE
@@ -521,7 +529,10 @@ target_link_libraries(acgc PRIVATE
 find_program(NOOKERY_AUDIO_CARGO_EXECUTABLE cargo REQUIRED)
 set(NOOKERY_AUDIO_CARGO_TARGET_DIR "${CMAKE_BINARY_DIR}/nookery-audio-cargo")
 if (WIN32)
-    set(NOOKERY_AUDIO_RUST_LIBRARY_NAME "nookery_audio.dll")
+    # MinGW-w64 cannot emit a DLL with unresolved imports, and this image
+    # references the pc_audio.c host seam. Build the static archive on Windows
+    # and link it into the executable: same symbols, resolved at link time.
+    set(NOOKERY_AUDIO_RUST_LIBRARY_NAME "libnookery_audio.a")
 elseif (APPLE)
     set(NOOKERY_AUDIO_RUST_LIBRARY_NAME "libnookery_audio.dylib")
 else ()
@@ -529,6 +540,28 @@ else ()
 endif ()
 set(NOOKERY_AUDIO_RUST_LIBRARY
     "${NOOKERY_AUDIO_CARGO_TARGET_DIR}/release/${NOOKERY_AUDIO_RUST_LIBRARY_NAME}")
+# Cross builds must name the Rust target triple, or Cargo emits a host artifact
+# into `release/` while CMake looks for a target one.
+if (WIN32)
+    # The crate declares crate-type = [cdylib, rlib, staticlib]. A plain
+    # `cargo build` therefore also tries to link a cdylib, which MinGW-w64
+    # cannot do because this image references the pc_audio.c host seam. Build
+    # ONLY the static archive on Windows via `cargo rustc --crate-type`.
+    set(NOOKERY_AUDIO_RUST_CARGO_ARGS
+        rustc --release --lib --crate-type staticlib
+        --manifest-path "${DECOMP_ROOT}/rust/Cargo.toml"
+        --package nookery-audio)
+else ()
+    set(NOOKERY_AUDIO_RUST_CARGO_ARGS
+        build --release --locked
+        --manifest-path "${DECOMP_ROOT}/rust/Cargo.toml"
+        --package nookery-audio)
+endif ()
+if (NOOKERY_RUNTIME_RUST_TARGET)
+    list(APPEND NOOKERY_AUDIO_RUST_CARGO_ARGS --target "${NOOKERY_RUNTIME_RUST_TARGET}")
+    set(NOOKERY_AUDIO_RUST_LIBRARY
+        "${NOOKERY_AUDIO_CARGO_TARGET_DIR}/${NOOKERY_RUNTIME_RUST_TARGET}/release/${NOOKERY_AUDIO_RUST_LIBRARY_NAME}")
+endif ()
 file(GLOB_RECURSE NOOKERY_AUDIO_RUST_SOURCES CONFIGURE_DEPENDS
     "${DECOMP_ROOT}/rust/nookery-audio/src/*.rs"
 )
@@ -536,9 +569,7 @@ add_custom_command(
     OUTPUT "${NOOKERY_AUDIO_RUST_LIBRARY}"
     COMMAND ${CMAKE_COMMAND} -E env
         "CARGO_TARGET_DIR=${NOOKERY_AUDIO_CARGO_TARGET_DIR}"
-        "${NOOKERY_AUDIO_CARGO_EXECUTABLE}" build --release --locked
-        --manifest-path "${DECOMP_ROOT}/rust/Cargo.toml"
-        --package nookery-audio
+        "${NOOKERY_AUDIO_CARGO_EXECUTABLE}" ${NOOKERY_AUDIO_RUST_CARGO_ARGS}
     DEPENDS ${NOOKERY_AUDIO_RUST_SOURCES}
         "${DECOMP_ROOT}/rust/Cargo.toml"
         "${DECOMP_ROOT}/rust/Cargo.lock"
@@ -553,16 +584,26 @@ set_target_properties(nookery_audio_shared PROPERTIES
     IMPORTED_LOCATION "${NOOKERY_AUDIO_RUST_LIBRARY}"
     IMPORTED_NO_SONAME TRUE
 )
-if (WIN32)
-    set_target_properties(nookery_audio_shared PROPERTIES
-        IMPORTED_IMPLIB "${NOOKERY_AUDIO_RUST_LIBRARY}.lib"
-    )
-endif ()
 add_dependencies(nookery_audio_shared nookery-audio-sharedlib)
 add_library(nookery_audio_host STATIC "${PC_ROOT}/src/pc_audio.c")
 target_include_directories(nookery_audio_host PRIVATE "${PC_ROOT}/include")
 target_link_libraries(nookery_audio_host PRIVATE aurora::core)
-target_link_libraries(acgc PRIVATE nookery_audio_shared nookery_audio_host)
+if (WIN32)
+    # MinGW-w64 refuses to produce a DLL with unresolved imports, while ELF lets
+    # a .so carry them and resolve at load time. The audio image references the
+    # host seam (nookery_audio_host_*, pc_audio_process_frame) that pc_audio.c
+    # provides, so on Windows the correct shape is a static archive linked into
+    # the executable -- the same symbols, resolved at link time, with no linker
+    # suppression and no stub. The archive is the custom command's OUTPUT.
+    add_library(nookery_audio_static STATIC IMPORTED GLOBAL)
+    set_target_properties(nookery_audio_static PROPERTIES
+        IMPORTED_LOCATION "${NOOKERY_AUDIO_RUST_LIBRARY}"
+    )
+    add_dependencies(nookery_audio_static nookery-audio-sharedlib)
+    target_link_libraries(acgc PRIVATE nookery_audio_static nookery_audio_host)
+else ()
+    target_link_libraries(acgc PRIVATE nookery_audio_shared nookery_audio_host)
+endif ()
 if (UNIX)
     find_package(Threads REQUIRED)
     target_link_libraries(acgc PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
@@ -663,7 +704,10 @@ endif ()
         "Rust target triple for nookery-runtime; empty uses Cargo's host target")
     set(NOOKERY_RUNTIME_CARGO_TARGET_DIR "${CMAKE_BINARY_DIR}/nookery-runtime-cargo")
     if (WIN32)
-        set(NOOKERY_RUNTIME_RUST_LIBRARY_NAME "nookery_runtime.dll")
+        # Same reasoning as nookery-audio: MinGW-w64 will not link a DLL with
+        # unresolved imports, and this image references the host callback table.
+        # Use the static archive and link it into the executable.
+        set(NOOKERY_RUNTIME_RUST_LIBRARY_NAME "libnookery_runtime.a")
     elseif (APPLE)
         set(NOOKERY_RUNTIME_RUST_LIBRARY_NAME "libnookery_runtime.dylib")
     else ()
@@ -671,10 +715,20 @@ endif ()
     endif ()
     set(NOOKERY_RUNTIME_RUST_LIBRARY
         "${NOOKERY_RUNTIME_CARGO_TARGET_DIR}/release/${NOOKERY_RUNTIME_RUST_LIBRARY_NAME}")
-    set(NOOKERY_RUNTIME_CARGO_ARGS
-        build --release --locked
-        --manifest-path "${DECOMP_ROOT}/rust/Cargo.toml"
-        --package nookery-runtime)
+    if (WIN32)
+        # Same reason as nookery-audio: the crate also declares a cdylib, which
+        # MinGW-w64 cannot link while the host callback seam is unresolved.
+        # Build only the static archive on Windows.
+        set(NOOKERY_RUNTIME_CARGO_ARGS
+            rustc --release --lib --crate-type staticlib
+            --manifest-path "${DECOMP_ROOT}/rust/Cargo.toml"
+            --package nookery-runtime)
+    else ()
+        set(NOOKERY_RUNTIME_CARGO_ARGS
+            build --release --locked
+            --manifest-path "${DECOMP_ROOT}/rust/Cargo.toml"
+            --package nookery-runtime)
+    endif ()
     if (NOOKERY_RUNTIME_RUST_TARGET)
         list(APPEND NOOKERY_RUNTIME_CARGO_ARGS --target "${NOOKERY_RUNTIME_RUST_TARGET}")
         set(NOOKERY_RUNTIME_RUST_LIBRARY
@@ -698,17 +752,19 @@ endif ()
     )
     add_custom_target(nookery-runtime-sharedlib DEPENDS "${NOOKERY_RUNTIME_RUST_LIBRARY}")
 
-    add_library(nookery_runtime_shared SHARED IMPORTED GLOBAL)
+    # On Windows the artifact is a static archive, so the imported target must be
+    # STATIC; declaring a .a as SHARED makes CMake look for an import library
+    # that does not exist.
+    if (WIN32)
+        add_library(nookery_runtime_shared STATIC IMPORTED GLOBAL)
+    else ()
+        add_library(nookery_runtime_shared SHARED IMPORTED GLOBAL)
+    endif ()
     set_target_properties(nookery_runtime_shared PROPERTIES
         IMPORTED_LOCATION "${NOOKERY_RUNTIME_RUST_LIBRARY}"
         IMPORTED_NO_SONAME TRUE
         INTERFACE_INCLUDE_DIRECTORIES "${PC_ROOT}/include"
     )
-    if (WIN32)
-        set_target_properties(nookery_runtime_shared PROPERTIES
-            IMPORTED_IMPLIB "${NOOKERY_RUNTIME_RUST_LIBRARY}.lib"
-        )
-    endif ()
     add_dependencies(nookery_runtime_shared nookery-runtime-sharedlib)
 
     add_library(nookery_runtime_adapter STATIC
@@ -733,6 +789,7 @@ endif ()
         set(NOOKERY_RUNTIME_RELATIVE_RPATH "\$ORIGIN")
     endif ()
     foreach (NOOKERY_RUNTIME_HOST_TARGET acgc)
+        if (NOT WIN32)
         add_custom_command(TARGET ${NOOKERY_RUNTIME_HOST_TARGET} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:nookery_runtime_shared>"
@@ -740,7 +797,8 @@ endif ()
             COMMENT "Copying the exact nookery-runtime image beside ${NOOKERY_RUNTIME_HOST_TARGET}"
             VERBATIM
         )
-        if (NOOKERY_RUNTIME_RELATIVE_RPATH)
+        endif ()
+        if (NOT WIN32 AND NOOKERY_RUNTIME_RELATIVE_RPATH)
             set_property(TARGET ${NOOKERY_RUNTIME_HOST_TARGET} APPEND PROPERTY
                 BUILD_RPATH "${NOOKERY_RUNTIME_RELATIVE_RPATH}")
             set_property(TARGET ${NOOKERY_RUNTIME_HOST_TARGET} APPEND PROPERTY
@@ -947,8 +1005,13 @@ if (CMAKE_BUILD_TYPE STREQUAL Debug OR CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
     set(DEBUG_FILES_LIST "")
     foreach (target IN LISTS BINARY_TARGETS EXTRA_TARGETS)
         get_target_output_name(${target} output_name)
-        if (WIN32)
+        if (MSVC)
             install(FILES $<TARGET_PDB_FILE:${target}> DESTINATION ${CMAKE_INSTALL_PREFIX} OPTIONAL)
+        elseif (WIN32)
+            # MinGW-w64 produces DWARF debug info inside the PE, not a PDB, so
+            # $<TARGET_PDB_FILE> is unsupported by the target linker. Gate the
+            # PDB install on MSVC specifically rather than on WIN32.
+            install(FILES $<TARGET_FILE:${target}> DESTINATION ${CMAKE_INSTALL_PREFIX} OPTIONAL)
         elseif (APPLE)
             get_target_prefix(${target} target_prefix)
             install(CODE "execute_process(WORKING_DIRECTORY \"${CMAKE_INSTALL_PREFIX}\" COMMAND rm -fr \"$<TARGET_FILE_NAME:${target}>.dSYM\")")

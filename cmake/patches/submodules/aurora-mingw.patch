@@ -1,0 +1,97 @@
+diff --git a/cmake/aurora_core.cmake b/cmake/aurora_core.cmake
+index eb0222e..15c20ba 100644
+--- a/cmake/aurora_core.cmake
++++ b/cmake/aurora_core.cmake
+@@ -44,7 +44,14 @@ endif ()
+ 
+ if (CMAKE_SYSTEM_NAME STREQUAL Windows)
+     # stuff for fetching system info.
++    # MSVC spells Windows import libraries `foo.lib`; MinGW-w64 uses `foo`.
++  # comsuppw has no MinGW equivalent and is only needed by the MSVC-only
++  # COM smart-pointer support this file does not use.
++  if (MSVC)
+     target_link_libraries(aurora_core PRIVATE wbemuuid.lib comsuppw.lib ntdll.lib DXGI.lib)
++  else ()
++    target_link_libraries(aurora_core PRIVATE wbemuuid ntdll dxgi)
++  endif ()
+ elseif (APPLE)
+     target_sources(aurora_core PRIVATE lib/system_info_mac.mm)
+     target_link_libraries(aurora_core PRIVATE "-framework Foundation")
+diff --git a/lib/card/DolphinCardPath.cpp b/lib/card/DolphinCardPath.cpp
+index ccec832..3e7ea4b 100644
+--- a/lib/card/DolphinCardPath.cpp
++++ b/lib/card/DolphinCardPath.cpp
+@@ -9,10 +9,16 @@
+ #ifndef NOMINMAX
+ #define NOMINMAX
+ #endif
+-#include <Windows.h>
++#include <windows.h>
+ #include <winreg.h>
++// The Windows SDK splits this into shlobj_core.h; MinGW-w64 only provides the
++// combined shlobj.h, which declares the same APIs.
++#if defined(__MINGW32__)
++#include <shlobj.h>
++#else
+ #include <shlobj_core.h>
+ #endif
++#endif
+ 
+ #include <SDL3/SDL_filesystem.h>
+ 
+diff --git a/lib/dolphin/os/OSMemory.cpp b/lib/dolphin/os/OSMemory.cpp
+index 2a963a5..5a75c2f 100644
+--- a/lib/dolphin/os/OSMemory.cpp
++++ b/lib/dolphin/os/OSMemory.cpp
+@@ -1,7 +1,7 @@
+ #ifdef _WIN32
+ #define WIN32_LEAN_AND_MEAN
+ #define NOMINMAX
+-#include <Windows.h>
++#include <windows.h>
+ #endif
+ 
+ #include "fmt/base.h"
+diff --git a/lib/system_info.cpp b/lib/system_info.cpp
+index d004fbf..b4a8224 100644
+--- a/lib/system_info.cpp
++++ b/lib/system_info.cpp
+@@ -5,7 +5,7 @@
+ #define WIN32_LEAN_AND_MEAN 1
+ #include <windows.h>
+ #include <combaseapi.h>
+-#include <Wbemidl.h>
++#include <wbemidl.h>
+ #include <comutil.h>
+ #include <dxgi.h>
+ #include <wrl/client.h>
+diff --git a/lib/thread.cpp b/lib/thread.cpp
+index 348b0ec..02d8404 100644
+--- a/lib/thread.cpp
++++ b/lib/thread.cpp
+@@ -20,7 +20,7 @@
+ #ifndef WIN32_LEAN_AND_MEAN
+ #define WIN32_LEAN_AND_MEAN
+ #endif
+-#include <Windows.h>
++#include <windows.h>
+ #elif defined(__APPLE__)
+ #include <pthread.h>
+ #endif
+@@ -270,7 +270,15 @@ void set_thread_name(const std::string& name) noexcept {
+   std::wstring wideName;
+   wideName.resize(static_cast<size_t>(length));
+   MultiByteToWideChar(CP_UTF8, 0, name.data(), static_cast<int>(name.size()), wideName.data(), length);
+-  SetThreadDescription(GetCurrentThread(), wideName.c_str());
++  // MinGW-w64 13 does not declare SetThreadDescription (Windows 10 1607+), and
++  // it is diagnostics-only, so resolve it from kernel32 at runtime instead of
++  // requiring the SDK prototype. Absent on older Windows: naming is skipped.
++  using SetThreadDescriptionFn = HRESULT(WINAPI*)(HANDLE, PCWSTR);
++  static const auto set_thread_description = reinterpret_cast<SetThreadDescriptionFn>(
++      GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "SetThreadDescription"));
++  if (set_thread_description != nullptr) {
++    set_thread_description(GetCurrentThread(), wideName.c_str());
++  }
+ #elif defined(__APPLE__)
+   const std::string truncated = name.substr(0, 63);
+   pthread_setname_np(truncated.c_str());

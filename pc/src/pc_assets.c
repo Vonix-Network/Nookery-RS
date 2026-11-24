@@ -21,13 +21,21 @@ static int g_rel_data_is_aligned = 0;
 static void* aurora_aligned_alloc(size_t alignment, size_t size) {
 #if defined(_MSC_VER)
     return _aligned_malloc(size, alignment);
+#elif defined(__MINGW32__)
+    /* MinGW-w64 has neither aligned_alloc (C11) nor posix_memalign in its
+     * default -win32 CRT variant, but it does provide the MSVC-compatible
+     * _aligned_malloc, which takes the same arguments in the same order as the
+     * MSVC call above and requires a matching _aligned_free. */
+    return _aligned_malloc(size, alignment);
 #else
     return aligned_alloc(alignment, size);
 #endif
 }
 
 static void aurora_aligned_free(void* ptr) {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
+    /* Must match _aligned_malloc above; the MSVC CRT asserts on a mismatched
+     * free and MinGW behaves the same way. */
     _aligned_free(ptr);
 #else
     free(ptr);

@@ -1,0 +1,13 @@
+--- a/absl/time/internal/cctz/src/time_zone_info.cc
++++ b/absl/time/internal/cctz/src/time_zone_info.cc
+@@ -401,7 +401,9 @@
+ 
+ // fopen(3) adaptor for reading zoneinfo files (read-only binary mode).
+ inline FilePtr FOpen(const char* path) {
+-#if defined(_MSC_VER)
++// MinGW-w64 has fopen_s and does not define O_NONBLOCK, so it needs the
++// Windows branch as well as MSVC.
++#if defined(_MSC_VER) || defined(__MINGW32__)
+   FILE* fp;
+   if (fopen_s(&fp, path, "rb") != 0) fp = nullptr;
+   return FilePtr(fp, fclose);

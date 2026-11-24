@@ -47,9 +47,11 @@ enum {
 };
 
 /* sizeof(mQst_base_c) == 0xC */
-#ifdef _MSC_VER
-/* MSVC reserves the full bitfield storage unit. Use u16 so the deadline
- * starts at 0x02, and retain the original four-byte struct alignment. */
+#if defined(_MSC_VER) || defined(__MINGW32__)
+/* MSVC and MinGW-w64 GCC both reserve the full declared bitfield storage unit,
+ * so u32 bitfields push time_limit to 0x04. The 16 bits declared here exactly
+ * fill a u16, which places the deadline at 0x02 while keeping the four-byte
+ * struct alignment the disk layout requires. */
 typedef struct ATTRIBUTE_ALIGN(4) quest_base_s {
     /* 0x00 */ u16 quest_type : 2;
     /* 0x00 */ u16 quest_kind : 6;

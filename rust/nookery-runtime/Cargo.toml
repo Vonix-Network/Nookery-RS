@@ -9,7 +9,7 @@ description = "Deterministic host-adapter boundary for the Nookery game runtime"
 
 [lib]
 path = "src/lib.rs"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 
 [dependencies]
 nookery-game = { path = "../nookery-game" }
