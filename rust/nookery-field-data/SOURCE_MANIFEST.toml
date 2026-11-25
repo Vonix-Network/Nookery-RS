@@ -1,0 +1,1094 @@
+# Generated from checked-in field-data sources.
+# Files containing assets/*.inc are intentionally excluded.
+
+[[source]]
+path = "src/data/field/bg/acre/bg_data.c"
+kind = "background_data"
+symbol = "data_bgd"
+sha256 = "3045f3a4dbb183ac987b4829efb45462a3239fa13064d5bd86691cd636c8e653"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_player_select/grd_player_select_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_player_select_evw_anime"
+sha256 = "fa6ade50479ba0c35e83b4461f7a0fed6b0b01444db02fc6e7758ff48ffe4ffa"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c1_r1_1/grd_s_c1_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c1_r1_1_evw_anime"
+sha256 = "ad8f68ddca0a9f66805ff12c9721b59bcc88c122060d868af5c5d48957667a8d"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c1_r1_2/grd_s_c1_r1_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c1_r1_2_evw_anime"
+sha256 = "41cac19a6ce8242c8210f8b0b5f2cf91575cfe32689e1645685146eb5366ae86"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c1_r1_3/grd_s_c1_r1_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c1_r1_3_evw_anime"
+sha256 = "d34bb021b9e5da290968ee395f74f42d8194aa4ec8ccd37668e519ceb33741b4"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c1_r2_1/grd_s_c1_r2_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c1_r2_1_evw_anime"
+sha256 = "61feb54cc6779807adfaf23db19e83adcd33ff81cb91eeb09078a028d4a14828"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c1_r2_2/grd_s_c1_r2_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c1_r2_2_evw_anime"
+sha256 = "61cd5d900146090cc2a2bee3c25feccede2d9b3e6a1f89842a8873e72241839f"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c1_r2_3/grd_s_c1_r2_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c1_r2_3_evw_anime"
+sha256 = "968bb137b0747fd6acc3c804a7832ceb9320a14545751c0fcf7b5dfe2ee9740d"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c1_r3_1/grd_s_c1_r3_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c1_r3_1_evw_anime"
+sha256 = "224c2c7beba8b7198168c774443f8925cc855eca157c429f80411b3b8cc5f22d"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c1_r3_2/grd_s_c1_r3_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c1_r3_2_evw_anime"
+sha256 = "4dd71522cb23f4a64fe80e2062840f7eec46c85a1a946c5fb120bba6c4c933c3"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c1_r3_3/grd_s_c1_r3_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c1_r3_3_evw_anime"
+sha256 = "a4d106a31cba261a21690d5f96661832ab68e8cbac2fc52a9c8da84629dc2601"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c2_3/grd_s_c2_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c2_3_evw_anime"
+sha256 = "cdc3d5dee7c03c56e9654c499f8e10f44d3b4c56642892b00233c13325fa59f2"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c2_r1_1/grd_s_c2_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c2_r1_1_evw_anime"
+sha256 = "5eccdde17c91fe56ed3635881c595e193cc6ccdb4fddf290a1fcba19083d091a"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c2_r1_2/grd_s_c2_r1_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c2_r1_2_evw_anime"
+sha256 = "76e659e62e1aa57b3b357f5260c9db03674978c7dba4c8709ec2c8fed42c8042"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c2_r2_1/grd_s_c2_r2_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c2_r2_1_evw_anime"
+sha256 = "5d38c7457c2f0850a3b1aa56177482e4f72695497a2c6c2c0781697d53429d10"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c2_r2_2/grd_s_c2_r2_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c2_r2_2_evw_anime"
+sha256 = "9d769b8f0ca42e7ed233c97138ed8e6732e1050d7bf87d5d691d82677d1e0f25"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c3_2/grd_s_c3_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c3_2_evw_anime"
+sha256 = "725a2c4111b09af232d3a6ac151cb892a26a3dd3cac2930fdf88d5f1f20c2d33"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c3_r1_1/grd_s_c3_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c3_r1_1_evw_anime"
+sha256 = "7b7dc5d513b92d0e0115c0c480aa0fb368f852b50b58aa6f11a97332321e75a5"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c3_r1_2/grd_s_c3_r1_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c3_r1_2_evw_anime"
+sha256 = "5e6e14ff75dc6d9c4b7f2cd65ce7a7888855c249ece68d5704affde0c7a51fae"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c3_r2_1/grd_s_c3_r2_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c3_r2_1_evw_anime"
+sha256 = "d1ee71304c8426ff5667fbb3fe8d00b5c7b3123879e2ea99d295ddcb1cfeafa2"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c3_r2_2/grd_s_c3_r2_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c3_r2_2_evw_anime"
+sha256 = "2c47cf2d665e645445f82bf5fb23031ade1fef3ad690b11ba0ddef30f2c7a88e"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c3_s_1/grd_s_c3_s_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c3_s_1_evw_anime"
+sha256 = "f77e17f9895bea71cacc554f65bc79ae8cd6a4096d1f47c29fa26736fc5c5943"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c4_r1_1/grd_s_c4_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c4_r1_1_evw_anime"
+sha256 = "31577ab1fabb90bac2ada58b721fc1c795888eb595c9e7786bbb85e83e7c4354"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c4_r1_2/grd_s_c4_r1_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c4_r1_2_evw_anime"
+sha256 = "979828e3b21d2cddd4b5353cf945142da9ac089a8e9cc796a501ce0ccc9f664f"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c4_r2_1/grd_s_c4_r2_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c4_r2_1_evw_anime"
+sha256 = "0fb6e324a998e342a6e0810ba6e80e01b629afb230fc8b56f183f9696b4a63a7"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c4_r2_2/grd_s_c4_r2_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c4_r2_2_evw_anime"
+sha256 = "a5804cad4a06523f4bad180fdc2f44f902ef908b9acc57f42a179df1ba4ea94b"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c4_r3_1/grd_s_c4_r3_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c4_r3_1_evw_anime"
+sha256 = "375a3930c7cab88a1667d3cd7a5d5bddc2ec6d071e7363708ba0a472a73d6b1a"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c4_r3_2/grd_s_c4_r3_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c4_r3_2_evw_anime"
+sha256 = "090580946adc98260d002e4beb9c26851ab5d20b783f19158797f50d6edaa899"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c5_r1_1/grd_s_c5_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c5_r1_1_evw_anime"
+sha256 = "74db5b44c3d97d363cdd3b9fad3b299c125c41adf8dae55820454ff1268f7c57"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c5_r1_2/grd_s_c5_r1_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c5_r1_2_evw_anime"
+sha256 = "056e52a355f802354bda5ff7a26ce412409b4dfaaf346ddd9a9fe8ca1b2a2831"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c5_r2_1/grd_s_c5_r2_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c5_r2_1_evw_anime"
+sha256 = "eb8f2c488d180baf6adbc8f9944f51024ee7b9e761ab1fb37aad479d45d246c6"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c5_r2_2/grd_s_c5_r2_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c5_r2_2_evw_anime"
+sha256 = "9b0407b6f62d3c04ae011a7ab9612b34bb9539166e4ee82b9b579af3f5dc762f"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c5_r3_1/grd_s_c5_r3_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c5_r3_1_evw_anime"
+sha256 = "6dcce9ab28ed29582b6ac3e7dc016fbeafeea7915c2c31b7c6e4785d2cf2a6e7"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c5_r3_2/grd_s_c5_r3_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c5_r3_2_evw_anime"
+sha256 = "d04e339f0e9974686fb760aea554f6993a7c65dead9666d235f564d4bf9a2af1"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c6_r1_1/grd_s_c6_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c6_r1_1_evw_anime"
+sha256 = "8cf2d40abbd8f3939750be2c42877911bdd535c587dd1349ea73411ec11bd315"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c6_r1_2/grd_s_c6_r1_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c6_r1_2_evw_anime"
+sha256 = "a4ec8bae06af737ca90a6e63034d11a094d0a677a42f2965cc192200915e4182"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c6_r3_1/grd_s_c6_r3_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c6_r3_1_evw_anime"
+sha256 = "f22d5800075ff743652729b3c6f62bfd3b63fe71bc8b7fa316233a1574e14d8c"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c7_3/grd_s_c7_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c7_3_evw_anime"
+sha256 = "6ea0f7ae0077e48b3cffbd5a7c5f90c70002804e67033cb016f91e8212426f1f"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c7_r1_1/grd_s_c7_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c7_r1_1_evw_anime"
+sha256 = "d2f7da60a6bc1daa0d6df21f0906ce343575dcb0b917bba6e35fa6d49cea223d"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c7_r1_2/grd_s_c7_r1_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c7_r1_2_evw_anime"
+sha256 = "58a17b6a60922986b790e4dc2b4b083a87a6f4552c4d3388a39421eaec97b2d1"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c7_r3_1/grd_s_c7_r3_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c7_r3_1_evw_anime"
+sha256 = "1927a86d6cbfec4416b88294f9995cc976557e53b244a8549709fde0d7c6c27d"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_c7_r3_2/grd_s_c7_r3_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_c7_r3_2_evw_anime"
+sha256 = "9649d52c7403d25acf1a47f882d0b61b55ea952fff658fcefb3eed48551d3d94"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_e1_r1_1/grd_s_e1_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_e1_r1_1_evw_anime"
+sha256 = "25f80bac8b148d6fe1fbd70dc289166ed025426f3b8c6dc58efe006bce39c28b"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_f_4/grd_s_f_4_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_f_4_evw_anime"
+sha256 = "4a19127c909b6031fe8b59ff8a74fef864c302623a58d332218f6b5036924b4e"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_f_5/grd_s_f_5_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_f_5_evw_anime"
+sha256 = "931d9c3dd444a0913af17908cfcba54b786f47023f1a5904097980fe32eb1bd3"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_f_6/grd_s_f_6_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_f_6_evw_anime"
+sha256 = "4152d61c8194ae6480513ca145f8daa61caef86bfd6bfb970da5bdf65d0c3ed9"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_f_ko_3/grd_s_f_ko_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_f_ko_3_evw_anime"
+sha256 = "3511d5c0ce327dc39acd5afa68b4ae959f7fcdbf4f0b544c0782664f64388077"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_f_mu_3/grd_s_f_mu_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_f_mu_3_evw_anime"
+sha256 = "d1f75e0509d88a2e2bcfd44ed4f13029777cad71c505087dfc0e408b5dfcf740"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_r1_1/grd_s_m_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_r1_1_evw_anime"
+sha256 = "9cc5f91aef3686edc1e2ce82dbf60d269b027b115885c47d739fbf694f8bbe54"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_r1_2/grd_s_m_r1_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_r1_2_evw_anime"
+sha256 = "55b4a466dcd28ec1b546fc160b47c1945aec9f41f69fbb53db3af8947e9bd3fa"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_r1_3/grd_s_m_r1_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_r1_3_evw_anime"
+sha256 = "4b2779e0aab1be7222bd6db08269dbbae61becd381163ff25c4609c54f742169"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_r1_4/grd_s_m_r1_4_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_r1_4_evw_anime"
+sha256 = "5a3e00150d42b6a79c6efb82bd54d489f89f596a1aeeed232b2acc7d205e2c78"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_r1_5/grd_s_m_r1_5_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_r1_5_evw_anime"
+sha256 = "bbcf7fe734771ee19fe9d566fe19f66e8497bb0dcde11d8da96a51b405d1d033"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_r1_b_1/grd_s_m_r1_b_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_r1_b_1_evw_anime"
+sha256 = "903a4a7d7c9884f2d1a66f5486180ac1bff2a3b100a5f5f806efcdc86026e2dd"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_r1_b_2/grd_s_m_r1_b_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_r1_b_2_evw_anime"
+sha256 = "ef09c8b2056da94283cd15e17ec2e9283cc5db39da95d653a722163dbbfd8012"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_r1_b_3/grd_s_m_r1_b_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_r1_b_3_evw_anime"
+sha256 = "e1a93af88401ed152bf7ce5b530397e270eb2ab688a9379e83d4be2f11dca525"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_ta_1/grd_s_m_ta_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_ta_1_evw_anime"
+sha256 = "cc4df7fa064dcc69bebb56c85abdcd73434464e57e9730b17f348a6cd9b95680"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_ta_2/grd_s_m_ta_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_ta_2_evw_anime"
+sha256 = "2849a5bde188563a30ba378948a05e377f02575ce10561efb324f43c4eabbba2"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_ta_3/grd_s_m_ta_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_ta_3_evw_anime"
+sha256 = "3c8bfb0fea74586ff927a7bc8921ed642920cc9dfaf571a9098966189fb410a9"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_wf_1/grd_s_m_wf_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_wf_1_evw_anime"
+sha256 = "848be0b4ed8fe75ccd2891fb017b6b9b03f46c884db959f48e764c91bc53a388"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_wf_2/grd_s_m_wf_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_wf_2_evw_anime"
+sha256 = "3f06b8a8b71f4e7c854bae132ecb373b4b462582b34fda3fe340eae82c56b155"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_m_wf_3/grd_s_m_wf_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_m_wf_3_evw_anime"
+sha256 = "f27abcfc1523ca34a3ccba0fa5f5617779b5f66e64adf40242f84b92392bb56c"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_1/grd_s_o_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_1_evw_anime"
+sha256 = "278bc55f8c3abc142f37c632c964eeeb21b277644a88ee126cd7d52567501d7a"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_10/grd_s_o_10_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_10_evw_anime"
+sha256 = "ff8008bb989df98acf57681a0dcdcc9f60f04db7e668312883a34760b8174b51"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_2/grd_s_o_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_2_evw_anime"
+sha256 = "116b32c6e968a1d1efa5688241c37c7a843994ccf43dc5ad1a57c9d455b8276f"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_3/grd_s_o_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_3_evw_anime"
+sha256 = "fecafa64f80f446b381751b9a4850c569fdc46342b3f2eef9ab167680d1d60bb"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_4/grd_s_o_4_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_4_evw_anime"
+sha256 = "52f28854d44d0ea7385258ce535688dd6a0d2eebfbaa68554aacf4680223570d"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_5/grd_s_o_5_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_5_evw_anime"
+sha256 = "032577e77e5c8c9c69405148d8aa4edf2d1d0a43eb19ac21e13c35ae477a883b"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_6/grd_s_o_6_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_6_evw_anime"
+sha256 = "f602c5d3a568f5b0a8aaa3c1e50889b6ab681fbd9a1f72eab981623f6f64d182"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_7/grd_s_o_7_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_7_evw_anime"
+sha256 = "d586f7f97cea2d195de85836f16b0966cd2865cec65fb16f494f7ca1c769be62"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_8/grd_s_o_8_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_8_evw_anime"
+sha256 = "4680e1b854d44c12e8eb41c060b5b8389e54b0801ef911951b709cfa5ff11a7e"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_9/grd_s_o_9_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_9_evw_anime"
+sha256 = "f572e462c5f8ccc2e2defce2a2236ae6d67646e9f8bd269c4094321297e2a64f"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_i_2/grd_s_o_i_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_i_2_evw_anime"
+sha256 = "ea2f45d759e0d33bc114ba65485cdb974d70d59a12d14d7b6fe492facf33468f"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_r1_1/grd_s_o_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_r1_1_evw_anime"
+sha256 = "de275358ee0faf1ad4fc699031ae4e908c5eb00c6dd04e4d92a0f357a6d88622"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_r1_2/grd_s_o_r1_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_r1_2_evw_anime"
+sha256 = "f46108e0a3857e8b79e45afef6ad42615efd0d078a770baddc0a9b33af575ccd"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_r1_3/grd_s_o_r1_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_r1_3_evw_anime"
+sha256 = "e134b2a705f329b492bcd3933f32039dacfafa31bf5973925f0d89f9b92cdf07"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_r1_4/grd_s_o_r1_4_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_r1_4_evw_anime"
+sha256 = "fb5158cef7cdbaf9ddc4ccca6bbae072e85cb7b72854751cb82511dce6145f65"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_r1_5/grd_s_o_r1_5_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_r1_5_evw_anime"
+sha256 = "d77b200c2634cd6c06a30dc85089b5f43e27b1e847ead8cc39ea3b653e99c905"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_r1_b_1/grd_s_o_r1_b_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_r1_b_1_evw_anime"
+sha256 = "80de3a438a2054aafbefda915bb011ebf61736e0a69f1f5db4f3dc40d6be521e"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_r1_b_2/grd_s_o_r1_b_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_r1_b_2_evw_anime"
+sha256 = "d9bc408fd7881848d62dcf17d9b53740cbda4697eb83af2be21af8d3d1a7e53c"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_r1_b_3/grd_s_o_r1_b_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_r1_b_3_evw_anime"
+sha256 = "6bfd0a43d9d3801371346518ee46d4a070a7e880bf48c9767da84000079a9267"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_ta_1/grd_s_o_ta_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_ta_1_evw_anime"
+sha256 = "e3268a22dfda3431f084aaebc29a44b10af2b0972ff62ab1155c116c6637688b"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_ta_2/grd_s_o_ta_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_ta_2_evw_anime"
+sha256 = "8b0201cc1f4158e753b07df6589882cedbe9bf8f0418a8abe85cd6549420ed20"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_ta_3/grd_s_o_ta_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_ta_3_evw_anime"
+sha256 = "cc98d9fa84c5aae11c73deefa4c819669b71bd1bc1f59044639d2e10d0c1939d"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_wf_1/grd_s_o_wf_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_wf_1_evw_anime"
+sha256 = "eda9dead45baf7f6b01703a75ba058d162e0d9e1fc0a0431d1dddfca4cf24d1f"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_wf_2/grd_s_o_wf_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_wf_2_evw_anime"
+sha256 = "6609b609984a56855613789033f5a152ee745c66db7fe93b26768851811b49f6"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_o_wf_3/grd_s_o_wf_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_o_wf_3_evw_anime"
+sha256 = "aee8c5e52ecc786a4d66d38b1deae9b89de91d04b602272f8ec55f6e4c09e3ba"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r1_1/grd_s_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r1_1_evw_anime"
+sha256 = "577eaa6c1d76219f4d7bc835f83fb4d2447a2f64c70bbd68a73ec11ae83b9392"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r1_2/grd_s_r1_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r1_2_evw_anime"
+sha256 = "a60139b20eb547169393f1e6aa80cbaf0a9c05270e0ca1842f440f5f3b25c9b8"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r1_3/grd_s_r1_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r1_3_evw_anime"
+sha256 = "0ca8cc120d8eee398482d047223304eccaf319f4d4f858c312ccbaa48ab83652"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r1_4/grd_s_r1_4_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r1_4_evw_anime"
+sha256 = "465a9f04f8cded65381beaeed1029df0ad11ff43b525a910a6d52c79a7dc8b07"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r1_b_1/grd_s_r1_b_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r1_b_1_evw_anime"
+sha256 = "5cca86ddbbcf717948691c3c150a9c301f456031c19aa70c66559e0e51e99c00"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r1_b_2/grd_s_r1_b_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r1_b_2_evw_anime"
+sha256 = "19456daa2cdbbeef22678188fa213373c793fe34d88b2d7404f65c300fde6875"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r1_b_3/grd_s_r1_b_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r1_b_3_evw_anime"
+sha256 = "6f52ca4912a07fbbbdbc2471b1a64c512e8d3bd4bea7f42530af3e8b0963462f"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r1_p_1/grd_s_r1_p_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r1_p_1_evw_anime"
+sha256 = "8cd09c7748a6ce10475b96d023db5282f3feb694897b24e9159f0dbeb466763b"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r2_1/grd_s_r2_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r2_1_evw_anime"
+sha256 = "9660e0da632f5a6f21c2e7a92a5aae7281f8246a6b495ee34a83caebe79540ac"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r2_2/grd_s_r2_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r2_2_evw_anime"
+sha256 = "8e8e89b5b9f0259c91afa306dccd70cf1cd1f845c9fd75a0fffe667bac5784d3"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r2_3/grd_s_r2_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r2_3_evw_anime"
+sha256 = "3e66d5ddc826c7d294a4d4d26fb788bf84b271947260a1a6ab765ff70af5161c"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r2_4/grd_s_r2_4_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r2_4_evw_anime"
+sha256 = "aeb3879717a3f619dc624eb49555841bd6cb30828f8d469844242ac60a3bab0f"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r2_b_1/grd_s_r2_b_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r2_b_1_evw_anime"
+sha256 = "4b3edf4912a1f147beff6a5ecc2d51135d951017fedcd8f4ba078b5f35d4797b"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r2_b_2/grd_s_r2_b_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r2_b_2_evw_anime"
+sha256 = "1b4971a29915d17fa26fb151129d22c3859fed0254b8dd3d599219c2cca95c84"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r2_b_3/grd_s_r2_b_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r2_b_3_evw_anime"
+sha256 = "c9f30ff0a6d8b010e18503017934a88f0f02d247fa836bbf820339d5968b0879"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r2_p_1/grd_s_r2_p_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r2_p_1_evw_anime"
+sha256 = "8f456ce16179733acb31742a35d2caab3752a4dc27c0f84fb98625fe5c462d0d"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r3_1/grd_s_r3_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r3_1_evw_anime"
+sha256 = "998d1727534dad42ec27e49e79d0fa7ae7cd29088322627255eb2afd0b13468c"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r3_2/grd_s_r3_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r3_2_evw_anime"
+sha256 = "67052b827430849c6ad0b71f40a3332fee0969cc9128327d0b7ce322d7d94db7"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r3_3/grd_s_r3_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r3_3_evw_anime"
+sha256 = "0f0bd8bda06932d3232534ae02ff835b1c6568f93b3537b6357e5aecd4e4983b"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r3_4/grd_s_r3_4_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r3_4_evw_anime"
+sha256 = "1cf1c08422f61b4f8e890612c310fb5f32264700b6c3790be7368edf6c0a8a99"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r3_b_1/grd_s_r3_b_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r3_b_1_evw_anime"
+sha256 = "8510c83d5c6a66be28ed448a5ef0696da0e5c859e005cbfcff7a368773cb031e"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r3_b_2/grd_s_r3_b_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r3_b_2_evw_anime"
+sha256 = "2c35b80bd3da04c8850e2459df3bcf123f70b86d2232052c92a2ca736ab78d7c"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r3_b_3/grd_s_r3_b_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r3_b_3_evw_anime"
+sha256 = "8584c6f6cd905927935f5b4e843097f18e27586518e22afd290561efc6cabdcc"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r3_p_1/grd_s_r3_p_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r3_p_1_evw_anime"
+sha256 = "1fff101c210bbb926887fcab3d3c795b8b358d108c9cd58cd8d3c2855f63b2eb"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r4_1/grd_s_r4_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r4_1_evw_anime"
+sha256 = "16ecc8999c6ddb0eb631f889b8e03ce6f6d292ad8b01d38a043c4e85d92e503c"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r4_2/grd_s_r4_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r4_2_evw_anime"
+sha256 = "16b9196bef1862c0ab5345e5546d72e3192603f0b4c5dad1b0e51bf3161230fe"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r4_3/grd_s_r4_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r4_3_evw_anime"
+sha256 = "c440adede185fa0c6f6b088edb2ac3a1ecf083403c2f53bba327f6bc16e34200"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r4_b_1/grd_s_r4_b_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r4_b_1_evw_anime"
+sha256 = "c178d8abe2dbb488ca5a23835ed372f52d4d954957ec80dcb0fd639e193551f2"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r4_b_2/grd_s_r4_b_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r4_b_2_evw_anime"
+sha256 = "022c1defd532a8c45fb845e658c87ec7621b95c52389c8fec5bae0ff6429eff9"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r4_p_1/grd_s_r4_p_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r4_p_1_evw_anime"
+sha256 = "de7f1c7a215a78d9ca3fa824e1d85165001b6482f670c2cc550e9bbf55a4eb60"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r5_1/grd_s_r5_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r5_1_evw_anime"
+sha256 = "e54accb0352dc9eccd3332e049b05a7804362371c9b5081a1e68b75c6c0b02c5"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r5_2/grd_s_r5_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r5_2_evw_anime"
+sha256 = "1b3bae39871f84aabe5f743e86211cbcbc6e45251338e1db95209805187cc44c"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r5_3/grd_s_r5_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r5_3_evw_anime"
+sha256 = "6a81c8e9c9d634a889d1f8c6ecca79fa6f78d61cd18bf8a6ffe715da5324a4eb"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r5_b_1/grd_s_r5_b_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r5_b_1_evw_anime"
+sha256 = "15063d8cd6082315baae169a0b40ac00c6976278c7b48ef2b33bcb8636bc93fd"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r5_b_2/grd_s_r5_b_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r5_b_2_evw_anime"
+sha256 = "2c54e972c19ad91c16ef0e514aa1542a0307d4634a54c2c954aeb4179ce88406"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r5_p_1/grd_s_r5_p_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r5_p_1_evw_anime"
+sha256 = "e91d1e2009bb08b89dae2dfb2f3e4e75ac594a957689f238ce8440072a98e346"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r6_1/grd_s_r6_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r6_1_evw_anime"
+sha256 = "1bf087422630d38361af9d858bcd4b57574dc67a34168cf497d2742c546b290f"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r6_2/grd_s_r6_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r6_2_evw_anime"
+sha256 = "17f0d0209ae91aae88fdc9410818870b079bf484d559c1c63d7fd6d0bdf505e1"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r6_3/grd_s_r6_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r6_3_evw_anime"
+sha256 = "57e473f83bbd2fe24dca1df9fde36d9cdef532e9a5dc0c29ab8396a1725598af"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r6_b_1/grd_s_r6_b_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r6_b_1_evw_anime"
+sha256 = "bc5098bb886c2878b9f11ed694816773fc613feae08fa484c867745e01bf91c3"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r6_b_2/grd_s_r6_b_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r6_b_2_evw_anime"
+sha256 = "ac62bbc0e3764158adcd28f7d76694603fa60cf5cbca8ea55624311bc4a0ce6b"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r6_p_1/grd_s_r6_p_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r6_p_1_evw_anime"
+sha256 = "ae4cfe2ab7e4c8d61cbac1d946fedad91ca1c4f4ff0c1a64eeab453f54deb9cb"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r7_1/grd_s_r7_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r7_1_evw_anime"
+sha256 = "2df1045cdd4489f57b3017618769cbe9def39bfcdfc7e1b42f0e7c1a741f360c"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r7_2/grd_s_r7_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r7_2_evw_anime"
+sha256 = "7c2dc693d72ac1eded5138f98ddc406bc192b8b93a915e6f291850202f72cb16"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r7_3/grd_s_r7_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r7_3_evw_anime"
+sha256 = "d88571835c93feef2c97d15843e3159d37f7ba622cfcf75dbde39191ad02013a"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r7_b_1/grd_s_r7_b_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r7_b_1_evw_anime"
+sha256 = "a5837c6a9381e0b5342e31d8ce14021422c20158ee6949a58786d88ca803ecd6"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r7_b_2/grd_s_r7_b_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r7_b_2_evw_anime"
+sha256 = "94eb732bd5320eda850893a9576522f1d0b0fb1a1338feb742fb8c7427a06c28"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_r7_p_1/grd_s_r7_p_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_r7_p_1_evw_anime"
+sha256 = "a930fb3a5ca6aedaaf51bc57768706c569c2e42926eec9e39502d6780ed88529"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_t_1/grd_s_t_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_t_1_evw_anime"
+sha256 = "811113a677713cf2be56f199edbc46ab1fbf41f1f8b07be7da110537265672d3"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_t_4/grd_s_t_4_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_t_4_evw_anime"
+sha256 = "e31839dac75ed68a1ae9cdbdeb3d7d0208e4fe4a47eba28693085041a8286aeb"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_t_5/grd_s_t_5_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_t_5_evw_anime"
+sha256 = "9896fc5ed89217c5eae1b609f32f3c02fc14c578dfcb1589da942529f23c366d"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_t_po_3/grd_s_t_po_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_t_po_3_evw_anime"
+sha256 = "0c3ae9edbfddd99f80deb1aba2a42b1096414d6e4308bc8e1187a92ecf039d35"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_t_r1_1/grd_s_t_r1_1_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_t_r1_1_evw_anime"
+sha256 = "1d206206b6f7fd2dcb7cebe23240fbbcc6d2fc6c6c1316cdf03263cb00929a8d"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_t_r1_2/grd_s_t_r1_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_t_r1_2_evw_anime"
+sha256 = "60833359740d2c0aae65aa59ca18541ee16eb16c58d34eb76384d3ec3a6de6fa"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_t_r1_3/grd_s_t_r1_3_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_t_r1_3_evw_anime"
+sha256 = "3d5a3a2e2dc39788fd454c0e661d36a64db339b4cb62a91169aa7ff62b46488a"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_t_r1_4/grd_s_t_r1_4_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_t_r1_4_evw_anime"
+sha256 = "38fec123a2f4aa9271e1926fe1b8b82887a23a0b4120d4cd4d02a295b086b566"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_t_r1_5/grd_s_t_r1_5_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_t_r1_5_evw_anime"
+sha256 = "c34902970c9a426e66dab21f28bc7b16b98fd3460f76c9c7c2beecd6a36afd69"
+
+[[source]]
+path = "src/data/field/bg/acre/grd_s_t_sh_2/grd_s_t_sh_2_evw_anime.c"
+kind = "event_animation"
+symbol = "grd_s_t_sh_2_evw_anime"
+sha256 = "6dffc4d85f340271e5d2aee5cccf7bfaca372a881c7e2cf66933f5ea3611d6cf"
+
+[[source]]
+path = "src/data/field/bg/acre/rom_uranai/rom_uranai_evw_anime.c"
+kind = "event_animation"
+symbol = "rom_uranai_evw_anime"
+sha256 = "5adadd234fce3b58ea3d2c0835ef5f78230f0f2de18c7c2c3f42b2b7da68cd1e"
+
+[[source]]
+path = "src/data/field/bg/acre/tmpr/tmpr_evw_anime.c"
+kind = "event_animation"
+symbol = "tmpr_evw_anime"
+sha256 = "0b7f26cba315ad77b10ebeab739e6461f0cdec5b3f351281124e38805449bc91"
+
+[[source]]
+path = "src/data/field/bg/acre/tmpr2/tmpr2_evw_anime.c"
+kind = "event_animation"
+symbol = "tmpr2_evw_anime"
+sha256 = "67d34f61757c99cee00d1155216d85ab098c44107a7597242fb11f04db090a28"
+
+[[source]]
+path = "src/data/field/bg/acre/tmpr3/tmpr3_evw_anime.c"
+kind = "event_animation"
+symbol = "tmpr3_evw_anime"
+sha256 = "7d94617b9e28c3f38d9e0550238a7742c72eb7ffd144884815f67672ed3f65be"
+
+[[source]]
+path = "src/data/field/bg/acre/tmpr4/tmpr4_evw_anime.c"
+kind = "event_animation"
+symbol = "tmpr4_evw_anime"
+sha256 = "d24ecf4e5a2797c22e5c891196f4dd215d6dcdf02c4061aebac0248040cbc096"
+
+[[source]]
+path = "src/data/field/field_data.c"
+kind = "field_data"
+symbol = "data_fdd"
+sha256 = "d76949af4572b3e45ab53c7cf79b873e2054bcee63d300e658132436158bd932"
+
+[[source]]
+path = "src/data/field/mvactor/broker_shop.c"
+kind = "move_actor"
+symbol = "broker_shop_actable"
+sha256 = "9b633f3b7eedfd0d6488e57efdc95c67ef977eebbff4e6a1d13d76064ffa807f"
+
+[[source]]
+path = "src/data/field/mvactor/buggy.c"
+kind = "move_actor"
+symbol = "buggy_actable"
+sha256 = "2be59fffa8546ae1d071e8a0c0ed9fcb195f8542045478a577a2d46bc3d338ef"
+
+[[source]]
+path = "src/data/field/mvactor/event_notification.c"
+kind = "move_actor"
+symbol = "event_notification_actable"
+sha256 = "4d5ff5cdd2e07d62594deacae235e20f26625410405c38e120f015dc96df77dc"
+
+[[source]]
+path = "src/data/field/mvactor/fd0.c"
+kind = "move_actor"
+symbol = "fd0_actable"
+sha256 = "1daa6a0e7cb2d9bada0ee044af8889d3c9bdb883804666c7c1a5500ccb874e52"
+
+[[source]]
+path = "src/data/field/mvactor/fd1.c"
+kind = "move_actor"
+symbol = "fd1_actable"
+sha256 = "dd2fab4f049fb34d8750d0c1408c85c3cad89f56c2c6ac30c1a73413fd451892"
+
+[[source]]
+path = "src/data/field/mvactor/fd2.c"
+kind = "move_actor"
+symbol = "fd2_actable"
+sha256 = "059a9a34929c0cdfa225ebdd57e40fd5184ded0ec9f1f075f3873b7918a294c2"
+
+[[source]]
+path = "src/data/field/mvactor/fd4.c"
+kind = "move_actor"
+symbol = "fd4_actable"
+sha256 = "6becab6430888977346e082e21acc6169d09b3d037ff9acfc501805055cf04cd"
+
+[[source]]
+path = "src/data/field/mvactor/fd_npc_land.c"
+kind = "move_actor"
+symbol = "fd_npc_land_actable"
+sha256 = "50dbb4de79e96e96cb9600d1685d6ee9676554223694eb7c23d951f7299ae004"
+
+[[source]]
+path = "src/data/field/mvactor/fgout.c"
+kind = "move_actor"
+symbol = "fgout_actable"
+sha256 = "70143f0c81a9ebfe7a7257858b1f36c33163a919090ed904727a61f1b76d11c8"
+
+[[source]]
+path = "src/data/field/mvactor/kamakura.c"
+kind = "move_actor"
+symbol = "kamakura_actable"
+sha256 = "7097ab0c189b61d8fa00f1d86262c9857b1f067f365add960fa47043ebe2c674"
+
+[[source]]
+path = "src/data/field/mvactor/npcRoom001.c"
+kind = "move_actor"
+symbol = "npcRoom001_actable"
+sha256 = "35b58a98d33edfb18fa597bd6b7c96363ee00d162dccbc1a1faa144adcd008d5"
+
+[[source]]
+path = "src/data/field/mvactor/playerRM.c"
+kind = "move_actor"
+symbol = "playerRM_actable"
+sha256 = "edfcd426aa7b491d52eee8e16c15713638488d89d3fcede404bb76f9438fb534"
+
+[[source]]
+path = "src/data/field/mvactor/playerRMM.c"
+kind = "move_actor"
+symbol = "playerRMM_actable"
+sha256 = "c18adc7c3428d8dce8c838f9b4a17e32f0ec3b814dabf914141de226be232372"
+
+[[source]]
+path = "src/data/field/mvactor/playerRMS.c"
+kind = "move_actor"
+symbol = "playerRMS_actable"
+sha256 = "4e890085397a494b3d4c4acc964a577b5c370750bdcd6008d2bfdb313942b90a"
+
+[[source]]
+path = "src/data/field/mvactor/player_select.c"
+kind = "move_actor"
+symbol = "player_select_actable"
+sha256 = "e60c2e77b564bc0782c462318342d8a4f4079025831c740be5bba9d1e0ef347d"
+
+[[source]]
+path = "src/data/field/mvactor/player_select2.c"
+kind = "move_actor"
+symbol = "player_select2_actable"
+sha256 = "536abc67c2becc8c4a7a2cc28342a6aabda54ac4bccb3f33a729f7e82bfcc2b1"
+
+[[source]]
+path = "src/data/field/mvactor/player_select3.c"
+kind = "move_actor"
+symbol = "player_select3_actable"
+sha256 = "34a423d87d04300e14ef5c02fa2aaf2cca8578275ad2fb11e7155026c88e3693"
+
+[[source]]
+path = "src/data/field/mvactor/player_select4.c"
+kind = "move_actor"
+symbol = "player_select4_actable"
+sha256 = "76989baa6d2dc249ef61347f3b69269c5290339e4856370afb970f820b33f06e"
+
+[[source]]
+path = "src/data/field/mvactor/police_box.c"
+kind = "move_actor"
+symbol = "police_box_actable"
+sha256 = "f0388b56066c3a26cd45b1125d7b4b6f0f309e6e4181ea4be1ec7e67df130bc0"
+
+[[source]]
+path = "src/data/field/mvactor/post_office.c"
+kind = "move_actor"
+symbol = "post_office_actable"
+sha256 = "ba56624197954ba1673c0ea37cff310a33d6053cb520cb3451be6223cad57500"
+
+[[source]]
+path = "src/data/field/mvactor/shop01.c"
+kind = "move_actor"
+symbol = "shop01_actable"
+sha256 = "c4299f8a27f90cc191b32ebbd55663e0c3ce80f18503226981e0e42645a9fca5"
+
+[[source]]
+path = "src/data/field/mvactor/shop02.c"
+kind = "move_actor"
+symbol = "shop02_actable"
+sha256 = "fff9e532b2ed2172f9973712d802ea765fc0422566c1a89ba30102d83b3f17b5"
+
+[[source]]
+path = "src/data/field/mvactor/shop03.c"
+kind = "move_actor"
+symbol = "shop03_actable"
+sha256 = "3efa2b700b251ea43aaa9afa726d9272b20411af7dbea2a83db37652ed0ff3a8"
+
+[[source]]
+path = "src/data/field/mvactor/shop04_1.c"
+kind = "move_actor"
+symbol = "shop04_1_actable"
+sha256 = "11d2f4934bae71e1d761103ddf37abf2611304775287d2806e2e8fa2df85fff2"
+
+[[source]]
+path = "src/data/field/mvactor/shop04_2.c"
+kind = "move_actor"
+symbol = "shop04_2_actable"
+sha256 = "9841545d69f559342e7c5a63488250787be7b00bb91f7d1ca294310e2e3949c1"
+
+[[source]]
+path = "src/data/field/mvactor/start_demo1.c"
+kind = "move_actor"
+symbol = "start_demo1_actable"
+sha256 = "bf5633aa32e1a731d87bb12a96b7a33f8749788f89b3d715abf39f74a4f71ede"
+
+[[source]]
+path = "src/data/field/mvactor/start_demo2.c"
+kind = "move_actor"
+symbol = "start_demo2_actable"
+sha256 = "b8ec98bcca5845e32b1b43af8681dc2b626b3424bedf7a220f34546429fd964d"
+
+[[source]]
+path = "src/data/field/mvactor/start_demo3.c"
+kind = "move_actor"
+symbol = "start_demo3_actable"
+sha256 = "585f5052df7eed24f3c940714d2c91f45c52b8888759d00e7125f0a2cb84f109"
+
+[[source]]
+path = "src/data/field/mvactor/tent.c"
+kind = "move_actor"
+symbol = "tent_actable"
+sha256 = "b7d986a0b0868ee095d283a9c1cf3efed41a48f6f32dd76bef981a71e6ff3381"
+
+[[source]]
+path = "src/data/field/mvactor/title_demo.c"
+kind = "move_actor"
+symbol = "title_demo_actable"
+sha256 = "776781562035f28df27f6ab4638eaacb526fba83d3553af090e2d8be770a063c"
+
+[[source]]
+path = "src/data/field/mvactor/water_test.c"
+kind = "move_actor"
+symbol = "water_test_actable"
+sha256 = "543b633b6e2e8b75506aa9ec242452581b692d6c5353a09572385804d220a7b4"

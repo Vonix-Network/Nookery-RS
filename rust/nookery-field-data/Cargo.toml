@@ -1,0 +1,13 @@
+[workspace]
+
+[package]
+name = "nookery-field-data"
+version = "0.1.0"
+description = "Pure-Rust field background, animation, and actor data tables"
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+publish = false
+
+[lib]
+path = "src/lib.rs"
