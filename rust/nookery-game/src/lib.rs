@@ -1,13 +1,27 @@
 //! Rust implementation of the nookery game frame and executor semantics.
 
 mod controller;
+mod diary;
 mod lifecycle;
+mod melody;
+mod olib;
+mod skin_matrix;
 
 pub use controller::{ControllerInput, ControllerState, STICK_MAX, STICK_MIN};
+pub use diary::{CHAR_SPACE, DIARY_ENTRY_SIZE, DiaryEntry, diary_strlen, init_diary};
 pub use lifecycle::{
     CleanupCallback, FirstGameInitializer, GAME_FRAME, GAME_HYRAL_SIZE, GAME_SECOND_SIZE, Game,
     GameGlobals, GameLifecycleHooks, GameVersion, GraphState, LifecycleError, LifecyclePhase,
     NextGame, SaveChannelCallback,
+};
+pub use melody::{
+    ACTOR_PART_NPC, ActorMelodyInfo, DEFAULT_MELODY, MELODY_LEN, actor_make_melody,
+    actor_make_this_melody, get_melody, make_melody, melody_from_u64, melody_to_u64,
+    set_default_melody, set_save_melody,
+};
+pub use olib::{ShortVector3, Vector3, radian_xy_by_2pos, sangle_xy_by_2pos};
+pub use skin_matrix::{
+    Matrix4, mul_matrix, project_mul_vector, set_rotate_xyz_s, set_scale, set_translate,
 };
 
 use std::error::Error;

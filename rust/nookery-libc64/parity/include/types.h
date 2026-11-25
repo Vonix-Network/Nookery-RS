@@ -8,6 +8,8 @@
  * leaving libc64/qrand.h and qrand.c themselves untouched.
  */
 #include <stdint.h>
+#include <stddef.h>
+#include <string.h>
 
 typedef int8_t s8;
 typedef int16_t s16;
@@ -20,5 +22,8 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 typedef int BOOL;
+
+#define TRUE 1
+#define FALSE 0
 
 #endif

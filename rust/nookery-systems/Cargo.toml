@@ -1,0 +1,10 @@
+[package]
+name = "nookery-systems"
+version = "0.1.0"
+description = "Pure Rust ports of Nookery system math and collision primitives"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+path = "src/lib.rs"

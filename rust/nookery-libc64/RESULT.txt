@@ -1,0 +1,47 @@
+STATUS=PASS
+
+FILES_ADDED:
+- parity/allocator_driver.c
+- parity/aprintf_driver.c
+- parity/sprintf_driver.c
+- parity/include/dolphin/os.h
+- parity/include/dolphin/os/OSMessage.h
+- parity/include/dolphin/os/OSThread.h
+- parity/include/dolphin/os/OSTime.h
+- parity/include/libultra/libultra.h
+- parity/include/libultra/osMesg.h
+- parity/include/libultra/osThread.h
+- parity/include/libultra/ultratypes.h
+- src/allocator.rs
+- src/format.rs
+
+FILES_MODIFIED:
+- parity/include/types.h
+- src/lib.rs
+- tests/differential.rs
+
+SOURCE_FILES_CONVERTED:
+- src/static/libc64/__osMalloc.c
+- src/static/libc64/aprintf.c
+- src/static/libc64/sprintf.c
+- src/static/libc64/math64.c (existing port retained)
+- src/static/libc64/sleep.c (existing port retained)
+- src/static/libc64/qrand.c (existing port retained)
+
+SOURCE_FILES_LEFT_C:
+- src/static/libc64/malloc.c — intentionally left C because it redefines host malloc/free; porting those symbols would change host allocator behavior. The Rust Arena model is independent of host allocator symbols.
+
+GATES:
+- CARGO_TARGET_DIR=/tmp/nookery-libc64-target cargo fmt -p nookery-libc64 -- --check: exit 0
+- CARGO_TARGET_DIR=/tmp/nookery-libc64-target cargo test -p nookery-libc64 --all-targets: exit 0
+- CARGO_TARGET_DIR=/tmp/nookery-libc64-target cargo clippy -p nookery-libc64 --all-targets -- -D warnings: exit 0
+- CARGO_TARGET_DIR=/tmp/nookery-libc64-target RUSTDOCFLAGS="-D warnings" cargo doc -p nookery-libc64 --no-deps: exit 0
+- git diff --check: exit 0
+
+MUTATION:
+- allocator differential (malloc alignment rounding defect): detected yes; mutated test failed, restored test passed
+- aprintf differential (zero-padding defect): detected yes; mutated test failed, restored test passed
+- sprintf differential (return-count defect): detected yes; mutated test failed, restored test passed
+
+COMMIT=NONE
+PUSH=NOT_PERFORMED

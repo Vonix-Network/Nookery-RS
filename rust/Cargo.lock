@@ -76,12 +76,23 @@ name = "nookery-famicom"
 version = "0.1.0"
 
 [[package]]
+name = "nookery-fixnes"
+version = "0.1.0"
+
+[[package]]
 name = "nookery-game"
 version = "0.1.0"
 
 [[package]]
 name = "nookery-graph"
 version = "0.1.0"
+
+[[package]]
+name = "nookery-host"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
 
 [[package]]
 name = "nookery-input"
@@ -127,6 +138,14 @@ dependencies = [
  "nookery-social-persistence",
  "nookery-social-proto",
 ]
+
+[[package]]
+name = "nookery-static"
+version = "0.1.0"
+
+[[package]]
+name = "nookery-systems"
+version = "0.1.0"
 
 [[package]]
 name = "nookery-texture"

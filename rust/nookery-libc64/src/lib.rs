@@ -7,9 +7,16 @@
 
 #![deny(missing_docs)]
 
+pub mod allocator;
+pub mod format;
 pub mod math64;
 pub mod sleep;
 
+pub use allocator::{
+    AllocatorStatus, Arena, BlockSnapshot, OS_MALLOC_MAGIC, OSArena_FLAG_CLEAR_MEM_ON_ALLOC,
+    OSArena_FLAG_CLEAR_MEM_ON_FREE, OSArena_FLAG_FREE_BLOCK_TEST, OsMemBlock,
+};
+pub use format::{AproutFunc, FormatArg, FormatError, format_string, sprintf, vaprintf};
 pub use math64::{facos, fatan2, fsqrt, libc64_fsqrt};
 pub use sleep::{
     OsAlarm, OsAlarmHandler, OsMessageQueue, OsThreadQueue, OsTime, OsTimer, SleepOperation,

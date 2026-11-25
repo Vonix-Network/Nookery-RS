@@ -163,10 +163,27 @@ fn duplicate_feature_flag_and_dispatch_bounds_are_preserved() {
         controller.make(EFFECT_NUM, input(15, 1)),
         SpawnOutcome::IgnoredInvalidId
     );
-    assert_eq!(
+    assert!(matches!(
         controller.make(EFFECT_NUM - 1, input(16, 1)),
-        SpawnOutcome::UnsupportedEffect
-    );
+        SpawnOutcome::Created(_)
+    ));
+}
+
+#[test]
+fn every_controller_id_has_a_source_profile() {
+    // C: include/ef_effect_control.h:29-154 and the profile table in
+    // src/effect/ef_effect_lib.c.  The generated-disc coin payload is not
+    // needed to verify controller dispatch and lifecycle initialization.
+    for id in 0..EFFECT_NUM {
+        let mut controller = EffectController::new();
+        assert!(
+            matches!(
+                controller.make(id, input(id as u16, 1)),
+                SpawnOutcome::Created(_)
+            ),
+            "effect ID {id} was not dispatchable"
+        );
+    }
 }
 
 #[test]
