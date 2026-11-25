@@ -1,0 +1,11 @@
+[package]
+name = "nookery-actor-port"
+version = "0.1.0"
+description = "Portable behavior slices from the first half of the Nookery actor sources"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+nookery-actor = { path = "../nookery-actor" }
