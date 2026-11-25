@@ -1,0 +1,10 @@
+# Generated lane-05 furniture slice metadata.
+# The complete per-source manifest is also exported as SOURCE_MANIFEST from
+# src/generated/furniture_part3.rs so Rust tests can verify it without a TOML
+# dependency.
+source_glob = "src/furniture/*.c"
+portable_partition = "final alphabetical third"
+converted_profiles = 160
+generated_from_disc = 3
+left_in_c_custom_vtables = 69
+left_in_c_version_conditional = 1
